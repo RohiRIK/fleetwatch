@@ -1,0 +1,195 @@
+# Customer Deployment - Simplified Stack
+# Includes: OpenSearch, API, Frontend, Caddy, Fetcher, Redis
+# SSO Authentication enabled with Redis session storage
+
+services:
+  # Redis - Session Store for SSO
+  redis:
+    image: redis:7-alpine
+    container_name: device_inventory_redis
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - redis_data:/data
+    networks:
+      - device_inventory
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-changeme}
+      --appendonly yes
+      --maxmemory 100mb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # OpenSearch - Data Store
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: device_inventory_opensearch
+    environment:
+      - discovery.type=single-node
+      - cluster.name=device-inventory-es
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    env_file:
+      - ./.env
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    networks:
+      - device_inventory
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # TypeScript API - Backend
+  api-ts:
+    container_name: device_inventory_api_ts
+    build:
+      context: ./api-ts
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env
+    environment:
+      - ES_NODE=http://opensearch:9200
+      - PORT=3001
+      - NODE_ENV=development # Changed to development for hot-reloading
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - INGEST_SECRET=${INGEST_SECRET}
+      - REDIS_URL=redis://default:${REDIS_PASSWORD:-changeme}@redis:6379
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./api-ts:/app
+      - /app/node_modules
+      - fetcher_data:/data
+      - ./.env:/app/.env:rw  # Mount .env for auto-provisioning writes
+      - certs_data:/app/.certs  # Shared certs volume for auto-provisioning
+    command: bun run dev
+    networks:
+      - device_inventory
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # Next.js Frontend - UI
+  frontend-next:
+    container_name: device_inventory_frontend_next
+    build:
+      context: ./frontend-next
+      dockerfile: Dockerfile
+      target: development # Target the development stage for hot-reloading
+      # args:
+      # #   # [FIX] Re-add the explicit IP here
+      #   NEXT_PUBLIC_API_URL: "http://172.28.212.52"
+    environment:
+      # [FIX] Proxy handles /api
+      - NEXT_PUBLIC_API_URL=/api
+      - API_BASE_URL=http://api-ts:3001
+      - NODE_ENV=development # Changed to development
+      - PORT=3002
+      - WATCHPACK_POLLING=true
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./frontend-next:/app
+      - /app/node_modules
+      - /app/.next # Fix for 'Resource deadlock' on macOS
+    command: bun run dev
+    depends_on:
+      - api-ts
+    networks:
+      - device_inventory
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # Caddy - Reverse Proxy (HTTPS with self-signed certs for SSO)
+  caddy:
+    image: caddy:2-alpine
+    container_name: device_inventory_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - device_inventory
+    depends_on:
+      - api-ts
+      - frontend-next
+
+  # Fetcher - Data Collection
+  fetcher:
+    container_name: device_inventory_fetcher
+    build:
+      context: ./fetcher
+      dockerfile: Dockerfile
+    volumes:
+      - ./fetcher:/app
+      - /app/node_modules
+      - fetcher_data:/data
+      - ./.env:/app/.env:ro  # Mount .env for Zero-Touch configuration access
+      - certs_data:/app/.certs:ro  # Shared certs volume from api-ts
+    env_file:
+      - ./.env
+    environment:
+      - API_BASE=http://api-ts:3001
+      - INGEST_SECRET=${INGEST_SECRET}
+      - REDIS_URL=redis://default:${REDIS_PASSWORD:-changeme}@redis:6379
+    networks:
+      - device_inventory
+    depends_on:
+      - api-ts
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+networks:
+  device_inventory:
+    driver: bridge
+
+volumes:
+  opensearch_data:
+  fetcher_data:
+  caddy_data:
+  caddy_config:
+  redis_data:
+  certs_data:  # Shared volume for auto-provisioned certificates

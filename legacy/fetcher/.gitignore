@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+bun.lock
+
+# TypeScript build output
+dist/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Azure AD App Registration - Sensitive Files
+certificates/
+config/
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Delta query state (contains deltaLinks)
+/data/.delta-state/
+
+# Data files (too large for git)
+/data/*.json
+/data/history/
+/data/trends/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Ai context
+GEMINI.md
+.claude

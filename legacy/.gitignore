@@ -1,0 +1,67 @@
+# Node and npm/yarn/bun
+node_modules
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+.pnp.cjs
+.bun/
+
+# Build artifacts
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.bakcup
+.env.backup*
+
+# Certificates and secrets
+certs/
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
+
+# IDEs and Editors
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.bak
+*.swo
+
+# Docker
+!Dockerfile
+!docker-compose*.yml
+.dockerignore
+
+# Gemini specific files
+.gemini/
+.gemini-clipboard/
+.geminiignore
+.research_cache/
+.summaries/
+
+# Other temporary or generated files
+temp/
+tmp/
+*.tmp
+*.backup
+*.bak
+*.orig
+README.md.bak
+
+certs
+node_modules
+node_modules

@@ -1,0 +1,17 @@
+# Device Inventory Fetcher Schedule
+# Runs fetcher on schedule and POSTs data to API
+#
+# Format: minute hour day month weekday command
+#
+# Common schedules:
+# Every 30 minutes:  */30 * * * * /app/run-and-ingest.sh
+# Every hour:        0 * * * * /app/run-and-ingest.sh
+# Every 2 hours:     0 */2 * * * /app/run-and-ingest.sh
+# Every 6 hours:     0 */6 * * * /app/run-and-ingest.sh
+# Daily at 3 AM:     0 3 * * * /app/run-and-ingest.sh
+
+# Default: Run every 30 minutes (incremental sync)
+*/30 * * * * /app/run-and-ingest.sh 2>&1 | tee -a /data/logs/cron.log > /proc/1/fd/1
+
+# Run Entra ID Log Sync every 15 minutes
+*/15 * * * * cd /app && bun run scripts/sync-entra-logs.ts 2>&1 | tee -a /data/logs/entra-sync.log > /proc/1/fd/1

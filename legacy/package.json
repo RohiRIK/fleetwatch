@@ -1,0 +1,65 @@
+{
+  "name": "device_invenroty",
+  "version": "1.0.0",
+  "description": "This project provides a comprehensive dashboard for monitoring device analytics, including performance, battery health, app reliability, and blue screen events. It consists of a backend API, a frontend web application, and a data fetcher service.",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "scripts": {
+    "dev": "bun scripts/dev-fast.ts",
+    "dev:docker": "docker-compose up -d",
+    "build": "make build",
+    "test": "cd tests && bun test",
+    "test:watch": "cd tests && bun test --watch",
+    "test:coverage": "cd tests && bun test --coverage",
+    "test:integration": "cd tests && bun test tests/integration/**/*.test.ts",
+    "test:e2e": "cd tests && bun test tests/e2e/**/*.test.ts",
+    "test:all": "npm run lint && npm run test:coverage && npm run test:integration",
+    "lint": "eslint api/ frontend/ fetcher/ --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint api/ frontend/ fetcher/ --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "audit:security": "npm audit --audit-level=moderate",
+    "docker:rebuild": "make docker-full",
+    "docker:services": "make docker-services",
+    "clean": "make clean",
+    "prepare": "command -v husky >/dev/null 2>&1 && husky install || true"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github-oncloud:OnCloud-PS/device_invenroty.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-security": "^3.0.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  }
+}

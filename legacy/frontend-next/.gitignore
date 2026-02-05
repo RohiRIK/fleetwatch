@@ -1,0 +1,25 @@
+# Node.js
+node_modules/
+.next/
+out/
+
+# dotenv files
+.env
+.env*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDEs and other tools
+.vscode/
+.idea/
+.DS_Store
+
+# Next.js specific
+next-env.d.ts # Already present but good to include in case of regeneration
+
+# Gemini clipboard
+.gemini-clipboard/
