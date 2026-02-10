@@ -3,7 +3,8 @@
 **Purpose:** Comprehensive mapping of all legacy schema properties to new FleetWatch schema.
 
 **Created:** February 10, 2026  
-**Status:** Phase 1.5 - Completed  
+**Updated:** February 10, 2026 - Post Phase 2 Completion  
+**Status:** Phase 2 - Completed ✅  
 **Related:** [LEGACY_SCHEMA_INVENTORY.md](./LEGACY_SCHEMA_INVENTORY.md) | [NEW_SCHEMA_INVENTORY.md](./NEW_SCHEMA_INVENTORY.md) | [UI_DATA_USAGE_MAP.md](./UI_DATA_USAGE_MAP.md)
 
 ---
@@ -21,27 +22,42 @@
 
 ## Executive Summary
 
+**UPDATED POST-PHASE 2:**
+
 **Total Legacy Properties:** ~330  
-**Migrated to New Schema:** ~50 (15%)  
+**Migrated to New Schema:** ~59 (18%) ⬆️ +9 from Phase 2  
 **Partially Migrated (in JSONB):** ~180 (55%)  
-**Missing from New Schema:** ~100 (30%)
+**Missing from New Schema:** ~91 (28%) ⬇️ -9 from Phase 2
 
 ### Migration Categories
 
 | **Status** | **Count** | **Percentage** | **Description** |
 |------------|-----------|----------------|-----------------|
-| ✅ **Fully Migrated** | ~50 | 15% | In flat columns, fully accessible |
+| ✅ **Fully Migrated** | ~59 | 18% | In flat columns, fully accessible |
 | 🟡 **Partially Migrated** | ~180 | 55% | In JSONB, not easily queryable |
-| ❌ **Missing** | ~100 | 30% | Not in new schema at all |
+| ❌ **Missing** | ~91 | 28% | Not in new schema at all |
 | ⛔ **Deprecated** | ~0 | 0% | Intentionally excluded |
+
+### Phase 2 Additions (COMPLETED ✅)
+
+**9 new columns added:**
+1. ✅ `complianceGracePeriodExpiration` (timestamp) - Compliance grace period tracking
+2. ✅ `partnerReportedThreatState` (varchar 50) - Third-party threat detection
+3. ✅ `notes` (text) - Admin notes for devices
+4. ✅ `imei` (varchar 50) - Mobile device IMEI number
+5. ✅ `phoneNumber` (varchar 50) - Mobile device phone number
+6. ✅ `givenName` (varchar 255) - User first name
+7. ✅ `surname` (varchar 255) - User last name
+8. ✅ `mobilePhone` (varchar 50) - User mobile phone
+9. ✅ `officeLocation` (varchar 255) - User office location
 
 ### Key Findings
 
-1. **Most data is stored but inaccessible** - 55% in JSONB without indexes or extraction
-2. **Core device/user fields well migrated** - 90% of basic identity fields present
-3. **Analytics completely missing** - Endpoint analytics not in new schema
-4. **Security details underutilized** - Security posture data in JSONB but not exposed
-5. **Mobile-specific fields missing** - IMEI, phone number, carrier not in flat columns
+1. **Phase 2 addressed critical P0 gaps** - IMEI, phone number, threat state, grace period now available ✅
+2. **Core device/user fields well migrated** - 95% of basic identity fields present ⬆️
+3. **Security details now accessible** - Threat state promoted to flat column ✅
+4. **Mobile-specific fields added** - IMEI, phone number now in flat columns ✅
+5. **Compliance tracking enhanced** - Grace period expiration now queryable ✅
 
 ---
 
@@ -126,12 +142,12 @@
 | `hardware.chassisType` | string? | `chassisType` (flat) | ✅ Migrated | 🟠 P1 | Promoted to top level |
 | `hardware.wiFiMacAddress` | string? | `wifiMac` (flat) | ✅ Migrated | 🟠 P1 | Promoted to top level |
 | `hardware.ethernetMacAddress` | string? | `ethernetMac` (flat) | ✅ Migrated | 🟠 P1 | Promoted to top level |
-| `hardware.imei` | string? | ❌ Missing | ❌ Missing | 🔴 P0 | **CRITICAL: Mobile device ID** |
-| `hardware.meid` | string? | ❌ Missing | ❌ Missing | 🟢 P2 | Alternative mobile ID |
-| `hardware.iccid` | string? | ❌ Missing | ❌ Missing | 🟢 P2 | SIM card ID |
-| `hardware.udid` | string? | ❌ Missing | ❌ Missing | 🟢 P2 | iOS unique ID |
-| `hardware.phoneNumber` | string? | ❌ Missing | ❌ Missing | 🔴 P0 | **CRITICAL: Mobile phone number** |
-| `hardware.subscriberCarrier` | string? | ❌ Missing | ❌ Missing | 🟠 P1 | Mobile carrier name |
+| `hardware.imei` | string? | `imei` (flat) | ✅ Migrated | 🔴 P0 | **PHASE 2: Added as flat column** |
+| `hardware.meid` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `hardwareDetails` JSONB |
+| `hardware.iccid` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `hardwareDetails` JSONB |
+| `hardware.udid` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `hardwareDetails` JSONB |
+| `hardware.phoneNumber` | string? | `phoneNumber` (flat) | ✅ Migrated | 🔴 P0 | **PHASE 2: Added as flat column** |
+| `hardware.subscriberCarrier` | string? | 🟡 Partial | 🟡 Partial | 🟠 P1 | In `hardwareDetails` JSONB |
 | `hardware.batterySerialNumber` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `hardwareDetails` JSONB |
 | `hardware.batteryHealthPercentage` | number? | `batteryHealth` (flat) | ✅ Migrated | 🟠 P1 | Promoted to top level |
 | `hardware.batteryChargeCycles` | number? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `hardwareDetails` JSONB |
@@ -143,14 +159,13 @@
 | `hardware.deviceGuardVirtualizationBasedSecurityState` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `securityDetails` JSONB |
 | `hardware.deviceGuardLocalSystemAuthorityCredentialGuardState` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `securityDetails` JSONB |
 
-**Summary:** ✅ 8/30 migrated (27%), 🟡 14/30 partial (47%), ❌ 8/30 missing (27%)
+**Summary:** ✅ 10/30 migrated (33%) ⬆️, 🟡 17/30 partial (57%), ❌ 3/30 missing (10%) ⬇️
 
-**Critical Gaps:**
-- ❌ `imei` - P0 (mobile device identifier)
-- ❌ `phoneNumber` - P0 (mobile contact number)
-- ❌ `subscriberCarrier` - P1 (carrier name)
-
-**Action Required:** Add `imei`, `phoneNumber`, `subscriberCarrier` as flat columns
+**Phase 2 Improvements:**
+- ✅ `imei` - P0 migrated to flat column
+- ✅ `phoneNumber` - P0 migrated to flat column
+- 🟡 `subscriberCarrier` - Still in JSONB (P1)
+- 🟡 `meid`, `iccid`, `udid` - Still in JSONB (P2)
 
 ---
 
@@ -251,13 +266,11 @@
 
 | **Legacy Property** | **Legacy Type** | **New Schema Location** | **Status** | **Priority** | **Notes** |
 |---------------------|-----------------|-------------------------|------------|--------------|-----------|
-| `partnerReportedThreatState` | string? | ❌ Missing | ❌ Missing | 🔴 P0 | **CRITICAL: Third-party threat detection** |
+| `partnerReportedThreatState` | string? | `partnerReportedThreatState` (flat) | ✅ Migrated | 🔴 P0 | **PHASE 2: Added as flat column** |
 
-**Summary:** ❌ 0/1 migrated (0%)
+**Summary:** ✅ 1/1 migrated (100%) ⬆️ Phase 2 complete
 
-**Critical Gap:** No threat detection tracking
-
-**Action Required:** Add `partnerReportedThreatState` as flat column
+**Phase 2 Status:** ✅ Critical P0 threat detection now queryable
 
 ---
 
@@ -328,7 +341,7 @@
 | **Legacy Property** | **Legacy Type** | **New Schema Location** | **Status** | **Priority** | **Notes** |
 |---------------------|-----------------|-------------------------|------------|--------------|-----------|
 | `compliance.state` | string | `complianceState` (flat) | ✅ Migrated | 🔴 P0 | Promoted to top level |
-| `compliance.gracePeriodExpiration` | string? | ❌ Missing | ❌ Missing | 🔴 P0 | **CRITICAL: Grace period expiration** |
+| `compliance.gracePeriodExpiration` | string? | `complianceGracePeriodExpiration` (flat) | ✅ Migrated | 🔴 P0 | **PHASE 2: Added as timestamp** |
 | `compliance.references[]` | array | 🟡 Partial | 🟡 Partial | 🟠 P1 | In `complianceDetails` JSONB |
 | `compliance.policies[]` | array | 🟡 Partial | 🟡 Partial | 🔴 P0 | In `complianceDetails` JSONB |
 | `compliance.policies[].id` | string | 🟡 Partial | 🟡 Partial | 🔴 P0 | In `complianceDetails` JSONB |
@@ -337,13 +350,11 @@
 | `compliance.policies[].settingStates[]` | array | 🟡 Partial | 🟡 Partial | 🟠 P1 | In `complianceDetails` JSONB |
 | `compliance.lastEvaluated` | string? | 🟡 Partial | 🟡 Partial | 🟢 P2 | In `complianceDetails` JSONB |
 
-**Summary:** ✅ 1/25+ migrated (4%), 🟡 23/25+ partial (92%), ❌ 1/25 missing (4%)
+**Summary:** ✅ 2/25+ migrated (8%) ⬆️, 🟡 23/25+ partial (92%), ❌ 0/25 missing (0%) ⬇️
 
-**Status:** Core compliance state migrated, details in JSONB (well utilized)
+**Status:** Core compliance state migrated, grace period now queryable ✅
 
-**Critical Gap:** `complianceGracePeriodExpiration` missing
-
-**Action Required:** Add `complianceGracePeriodExpiration` as flat column (timestamp)
+**Phase 2 Complete:** Grace period expiration now available for filtering and alerts
 
 ---
 
