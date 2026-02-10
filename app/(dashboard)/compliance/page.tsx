@@ -565,9 +565,9 @@ export default function CompliancePage() {
                     <div className="border-t bg-muted/30 p-4">
                       <p className="text-sm font-medium mb-3">Affected Devices:</p>
                       <div className="space-y-2">
-                        {policy.affectedDevices.map((device) => (
+                        {policy.affectedDevices.map((device, deviceIndex) => (
                           <div
-                            key={device.id}
+                            key={`${policy.policyId}-${device.id}-${deviceIndex}`}
                             className="flex items-center justify-between p-3 rounded-md bg-card border"
                           >
                             <div className="flex items-center gap-3 flex-1">
