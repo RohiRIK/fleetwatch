@@ -3,14 +3,31 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Enhanced Middleware with Metrics Tracking
- * 1. Tracks response times for all requests
- * 2. Records request metrics (method, path, status, duration)
- * 3. Integrates with NextAuth for authentication
+ * Enhanced Middleware with RBAC and Metrics Tracking
+ * 1. Authentication check
+ * 2. Role-based route protection
+ * 3. Response time tracking
+ * 4. Request metrics recording
  */
+
+// Route access control configuration
+const ROUTE_ACCESS = {
+  // Public routes (no auth required)
+  public: ['/login', '/admin-login'],
+  
+  // VIEWER routes (minimum role: VIEWER)
+  viewer: ['/dashboard', '/inventory', '/devices', '/analytics', '/compliance'],
+  
+  // ADMIN routes (minimum role: ADMIN)
+  admin: ['/admin/settings', '/admin/monitoring'],
+  
+  // SUPERADMIN routes (minimum role: SUPERADMIN)
+  superadmin: ['/users', '/admin/users'],
+} as const;
 
 export default async function middleware(request: NextRequest) {
   const startTime = Date.now();
+  const pathname = request.nextUrl.pathname;
   
   // Get auth session
   const session = await auth();
@@ -18,13 +35,26 @@ export default async function middleware(request: NextRequest) {
   // Continue with request
   let response: NextResponse;
   
-  if (!session?.user) {
+  // Check if route is public
+  if (isPublicRoute(pathname)) {
+    response = NextResponse.next();
+  } else if (!session?.user) {
     // Redirect to login if not authenticated
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname);
+    loginUrl.searchParams.set('callbackUrl', pathname);
     response = NextResponse.redirect(loginUrl);
   } else {
-    response = NextResponse.next();
+    // Check role-based access
+    const hasAccess = await checkRouteAccess(pathname, session.user.email);
+    
+    if (!hasAccess) {
+      // Forbidden - redirect to dashboard with error
+      const dashboardUrl = new URL('/dashboard', request.url);
+      dashboardUrl.searchParams.set('error', 'insufficient_permissions');
+      response = NextResponse.redirect(dashboardUrl);
+    } else {
+      response = NextResponse.next();
+    }
   }
   
   // Calculate response time
@@ -35,11 +65,47 @@ export default async function middleware(request: NextRequest) {
   response.headers.set('X-Request-ID', crypto.randomUUID());
   
   // Record metrics asynchronously (fire and forget)
-  recordMetrics(request, response, duration).catch((error) => {
-    // Silently ignore metrics errors - they're not critical
+  recordMetrics(request, response, duration).catch(() => {
+    // Silently ignore metrics errors
   });
   
   return response;
+}
+
+/**
+ * Check if route is public (no auth required)
+ */
+function isPublicRoute(pathname: string): boolean {
+  return ROUTE_ACCESS.public.some(route => pathname.startsWith(route));
+}
+
+/**
+ * Check if user has access to route based on role
+ */
+async function checkRouteAccess(pathname: string, userEmail: string | null | undefined): Promise<boolean> {
+  if (!userEmail) return false;
+  
+  // Import dynamically to avoid edge runtime issues
+  const { getCurrentUserRole } = await import('@/lib/auth/rbac');
+  const role = await getCurrentUserRole();
+  
+  // Check SUPERADMIN routes
+  if (ROUTE_ACCESS.superadmin.some(route => pathname.startsWith(route))) {
+    return role === 'SUPERADMIN';
+  }
+  
+  // Check ADMIN routes
+  if (ROUTE_ACCESS.admin.some(route => pathname.startsWith(route))) {
+    return role === 'ADMIN' || role === 'SUPERADMIN';
+  }
+  
+  // Check VIEWER routes (all authenticated users can access)
+  if (ROUTE_ACCESS.viewer.some(route => pathname.startsWith(route))) {
+    return true;
+  }
+  
+  // Default: allow access for authenticated users
+  return true;
 }
 
 async function recordMetrics(
@@ -70,7 +136,6 @@ async function recordMetrics(
     });
   } catch (error) {
     // Silently fail - metrics are not critical
-    // Don't log to avoid console spam in Edge Runtime
   }
 }
 
@@ -82,10 +147,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - login (login page)
-     * - admin-login (emergency admin login page)
      * - monitoring (Sentry tunnel)
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|login|admin-login|monitoring).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|icon.png|monitoring).*)',
   ],
 };

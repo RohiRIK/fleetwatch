@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { users, devices } from '@/lib/db/schema';
 import { eq, or, ilike, sql, desc, asc } from 'drizzle-orm';
+import { protectRouteWithRole } from '@/lib/auth/api-rbac';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  // Protect route - require SUPERADMIN role to view users
+  const { error } = await protectRouteWithRole('SUPERADMIN');
+  if (error) return error;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     

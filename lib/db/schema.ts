@@ -3,6 +3,7 @@ import { relations } from 'drizzle-orm';
 
 // Enums
 export const teamRoleEnum = pgEnum('team_role', ['OWNER', 'MEMBER']);
+export const userRoleEnum = pgEnum('user_role', ['VIEWER', 'ADMIN', 'SUPERADMIN']);
 
 // ============================================================================
 // USERS TABLE
@@ -16,6 +17,7 @@ export const users = pgTable('users', {
   department: varchar('department', { length: 255 }),
   azureId: varchar('azure_id', { length: 255 }).unique(),
   passwordHash: varchar('password_hash', { length: 255 }), // For emergency admin fallback
+  role: userRoleEnum('role').notNull().default('VIEWER'), // User's system role
   emailVerified: timestamp('email_verified'), // Required by NextAuth.js
   image: varchar('image', { length: 1024 }), // Optional profile image
   createdAt: timestamp('created_at').notNull().defaultNow(),

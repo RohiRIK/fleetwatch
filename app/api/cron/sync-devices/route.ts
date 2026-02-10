@@ -4,6 +4,7 @@ import { db } from '@/lib/db/drizzle';
 import { syncLogs } from '@/lib/db/schema';
 import { syncDevices } from '@/lib/services/deviceSync';
 import { syncUsers } from '@/lib/services/userSync';
+import { protectRouteWithPermission } from '@/lib/auth/api-rbac';
 
 /**
  * Cron job endpoint for syncing devices and users from Microsoft Intune
@@ -20,6 +21,10 @@ import { syncUsers } from '@/lib/services/userSync';
  */
 
 export async function POST(request: NextRequest) {
+  // Protect route - require 'trigger_sync' permission (ADMIN or SUPERADMIN)
+  const { error } = await protectRouteWithPermission('trigger_sync');
+  if (error) return error;
+
   const startTime = Date.now();
   
   try {
@@ -119,6 +124,10 @@ export async function POST(request: NextRequest) {
  * Returns recent sync logs
  */
 export async function GET() {
+  // Protect route - require 'view_monitoring' permission (ADMIN or SUPERADMIN)
+  const { error } = await protectRouteWithPermission('view_monitoring');
+  if (error) return error;
+
   try {
     // Get last 10 sync logs
     const recentSyncs = await db

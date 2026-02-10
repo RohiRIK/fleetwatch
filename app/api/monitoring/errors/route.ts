@@ -3,18 +3,20 @@
  * GET /api/monitoring/errors
  * 
  * Fetches recent errors from Sentry
- * Accessible to superadmins only
+ * Accessible to ADMIN and SUPERADMIN only
  */
 
 import { NextResponse } from "next/server";
-import { requireSuperadmin } from "@/lib/auth/rbac";
+import { protectRouteWithPermission } from "@/lib/auth/api-rbac";
 import { fetchSentryIssues } from "@/lib/monitoring/sentry";
 import { log } from "@/lib/logger/logger";
 
 export async function GET(request: Request) {
+  // Protect route - require 'view_monitoring' permission (ADMIN or SUPERADMIN)
+  const { error } = await protectRouteWithPermission('view_monitoring');
+  if (error) return error;
+
   try {
-    // Check authorization
-    await requireSuperadmin();
     
     // Parse query parameters
     const { searchParams } = new URL(request.url);
