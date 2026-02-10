@@ -31,6 +31,10 @@ interface PolicyBreakdown {
     manufacturer: string;
     os: string;
     user: string;
+    // Phase 2 fields
+    gracePeriodExpiration?: Date | null;
+    threatState?: string | null;
+    jailBroken: string;
   }>;
 }
 
@@ -88,7 +92,7 @@ function categorizePolicyRiskLevel(policyName: string): 'critical' | 'high' | 'm
 
 export async function GET() {
   try {
-    // Fetch all devices with their compliance details
+    // Fetch all devices with their compliance details (including Phase 2 fields)
     const allDevices = await db
       .select({
         id: devices.id,
@@ -98,6 +102,10 @@ export async function GET() {
         userDisplayName: devices.userDisplayName,
         isCompliant: devices.isCompliant,
         complianceDetails: devices.complianceDetails,
+        // Phase 2 fields
+        complianceGracePeriodExpiration: devices.complianceGracePeriodExpiration,
+        partnerReportedThreatState: devices.partnerReportedThreatState,
+        jailBroken: devices.jailBroken,
       })
       .from(devices)
       .where(isNotNull(devices.complianceDetails));
@@ -156,6 +164,10 @@ export async function GET() {
           manufacturer: device.manufacturer || 'Unknown',
           os: device.operatingSystem || 'Unknown',
           user: device.userDisplayName || 'Unassigned',
+          // Phase 2 fields
+          gracePeriodExpiration: device.complianceGracePeriodExpiration,
+          threatState: device.partnerReportedThreatState,
+          jailBroken: device.jailBroken || 'Unknown',
         });
       }
     }
@@ -217,6 +229,17 @@ export async function GET() {
     const uniqueFailedPolicies = policyMap.size;
     const totalPolicyFailures = policyFailures.length;
 
+    // Phase 2 statistics
+    const devicesInGracePeriod = allDevices.filter(d => 
+      d.complianceGracePeriodExpiration && new Date(d.complianceGracePeriodExpiration) > new Date()
+    ).length;
+    const devicesWithThreats = allDevices.filter(d => 
+      d.partnerReportedThreatState && !['unknown', 'unavailable'].includes(d.partnerReportedThreatState.toLowerCase())
+    ).length;
+    const jailbrokenDevices = allDevices.filter(d => 
+      d.jailBroken && d.jailBroken.toLowerCase() !== 'unknown'
+    ).length;
+
     return NextResponse.json({
       success: true,
       summary: {
@@ -226,6 +249,10 @@ export async function GET() {
         complianceRate: totalDevices > 0 ? ((compliantDevices / totalDevices) * 100).toFixed(1) : '0.0',
         uniqueFailedPolicies,
         totalPolicyFailures,
+        // Phase 2 summary stats
+        devicesInGracePeriod,
+        devicesWithThreats,
+        jailbrokenDevices,
       },
       policies,
       complianceByRisk,

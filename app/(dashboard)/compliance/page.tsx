@@ -18,6 +18,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   Users,
+  Clock,
+  Bug,
+  Smartphone,
 } from 'lucide-react';
 import {
   LineChart,
@@ -41,6 +44,10 @@ interface PolicyBreakdown {
     manufacturer: string;
     os: string;
     user: string;
+    // Phase 2 fields
+    gracePeriodExpiration?: string | null;
+    threatState?: string | null;
+    jailBroken?: string;
   }>;
 }
 
@@ -52,6 +59,10 @@ interface ComplianceData {
     complianceRate: string;
     uniqueFailedPolicies: number;
     totalPolicyFailures: number;
+    // Phase 2 summary stats
+    devicesInGracePeriod?: number;
+    devicesWithThreats?: number;
+    jailbrokenDevices?: number;
   };
   policies: PolicyBreakdown[];
   complianceByRisk: {
@@ -268,6 +279,59 @@ export default function CompliancePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Phase 2 Enhanced Cards */}
+      {(summary.devicesInGracePeriod !== undefined || summary.devicesWithThreats !== undefined || summary.jailbrokenDevices !== undefined) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Grace Period Devices */}
+          {summary.devicesInGracePeriod !== undefined && (
+            <Card className="border-l-4 border-l-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Grace Period</CardTitle>
+                <Clock className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">{summary.devicesInGracePeriod}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Devices in compliance grace period
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Threat Detected Devices */}
+          {summary.devicesWithThreats !== undefined && (
+            <Card className="border-l-4 border-l-red-600">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Threats Detected</CardTitle>
+                <Bug className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">{summary.devicesWithThreats}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Devices with reported threats
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Jailbroken Devices */}
+          {summary.jailbrokenDevices !== undefined && (
+            <Card className="border-l-4 border-l-purple-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Jailbroken/Rooted</CardTitle>
+                <Smartphone className="h-4 w-4 text-purple-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">{summary.jailbrokenDevices}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Devices with compromised integrity
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Compliance by Risk Level */}
       <Card>
@@ -506,13 +570,40 @@ export default function CompliancePage() {
                             key={device.id}
                             className="flex items-center justify-between p-3 rounded-md bg-card border"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1">
                               <Users className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium text-sm">{device.name}</p>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm">{device.name}</p>
+                                  {/* Phase 2 indicators */}
+                                  {device.jailBroken && device.jailBroken !== 'Unknown' && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      <Smartphone className="h-3 w-3 mr-1" />
+                                      Jailbroken
+                                    </Badge>
+                                  )}
+                                  {device.threatState && !['unknown', 'unavailable'].includes(device.threatState.toLowerCase()) && (
+                                    <Badge variant="destructive" className="text-xs bg-red-600">
+                                      <Bug className="h-3 w-3 mr-1" />
+                                      Threat
+                                    </Badge>
+                                  )}
+                                  {device.gracePeriodExpiration && new Date(device.gracePeriodExpiration) > new Date() && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Grace Period
+                                    </Badge>
+                                  )}
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                   {device.manufacturer} • {device.os}
                                 </p>
+                                {/* Show grace period expiration if applicable */}
+                                {device.gracePeriodExpiration && (
+                                  <p className="text-xs text-blue-600 mt-1">
+                                    Grace period expires: {new Date(device.gracePeriodExpiration).toLocaleDateString()}
+                                  </p>
+                                )}
                               </div>
                             </div>
                             <div className="text-right">
