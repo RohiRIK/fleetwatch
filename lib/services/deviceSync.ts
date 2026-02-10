@@ -355,6 +355,10 @@ async function transformDeviceData(rawDevice: any, mode: SyncMode) {
     isEncrypted: rawDevice.isEncrypted || false,
     isSupervised: rawDevice.isSupervised || false,
     jailBroken: rawDevice.jailBroken || null,
+    complianceGracePeriodExpiration: rawDevice.complianceGracePeriodExpirationDateTime 
+      ? new Date(rawDevice.complianceGracePeriodExpirationDateTime) 
+      : null,
+    partnerReportedThreatState: rawDevice.partnerReportedThreatState || null,
     
     // User info (denormalized)
     userPrincipalName: rawDevice.userPrincipalName || null,
@@ -368,6 +372,9 @@ async function transformDeviceData(rawDevice: any, mode: SyncMode) {
     memoryTotal: rawDevice.physicalMemoryInBytes || null,
     batteryHealth: null, // Not directly available in basic device object
     chassisType: rawDevice.chassisType || null,
+    notes: null, // Admin-populated field, remains null from sync
+    imei: rawDevice.imei || null, // Mobile device IMEI
+    phoneNumber: rawDevice.phoneNumber || null, // Mobile device phone number
     
     // Network
     ipAddressV4: rawDevice.wiFiMacAddress ? null : rawDevice.ipAddressV4 || null, // Prefer WiFi MAC

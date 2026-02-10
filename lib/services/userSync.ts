@@ -140,6 +140,10 @@ async function syncSingleUser(
     displayName: azureUser.displayName || null,
     jobTitle: azureUser.jobTitle || null,
     department: azureUser.department || null,
+    givenName: azureUser.givenName || null,
+    surname: azureUser.surname || null,
+    mobilePhone: azureUser.mobilePhone || null,
+    officeLocation: azureUser.officeLocation || null,
     updatedAt: new Date(),
   };
 
