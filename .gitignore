@@ -39,3 +39,26 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# docker volumes and data
+postgres_data/
+redis_data/
+pgadmin_data/
+
+# ssl certificates
+angie/certs/*.crt
+angie/certs/*.key
+angie/certs/*.pem
+
+# drizzle migrations
+drizzle/
+
+# monitoring and logging
+logs/
+*.log
+.sentry-*
+sentry.properties
+
+# Sentry Config File
+.sentryclirc
+
