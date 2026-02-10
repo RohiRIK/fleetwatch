@@ -42,6 +42,9 @@ interface Device {
   isEncrypted: boolean;
   isSupervised: boolean;
   jailBroken: string | null;
+  // Phase 2 new fields - compliance & security
+  complianceGracePeriodExpiration: string | null;
+  partnerReportedThreatState: string | null;
   userPrincipalName: string | null;
   userDisplayName: string | null;
   userEmail: string | null;
@@ -51,6 +54,10 @@ interface Device {
   memoryTotal: number | null;
   batteryHealth: number | null;
   chassisType: string | null;
+  // Phase 2 new fields - mobile devices
+  imei: string | null;
+  phoneNumber: string | null;
+  notes: string | null;
   ipAddressV4: string | null;
   wifiMac: string | null;
   ethernetMac: string | null;
@@ -279,6 +286,44 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Phase 2: Admin Notes */}
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Admin Notes
+                </CardTitle>
+                <CardDescription>
+                  Internal notes and comments (admin only)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <textarea
+                  className="w-full min-h-[100px] p-3 border rounded-md text-sm resize-y"
+                  placeholder="Add internal notes about this device..."
+                  defaultValue={device.notes || ''}
+                  onBlur={async (e) => {
+                    const newNotes = e.target.value;
+                    try {
+                      const response = await fetch(`/api/devices/${device.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ notes: newNotes }),
+                      });
+                      if (!response.ok) {
+                        console.error('Failed to save notes');
+                      }
+                    } catch (error) {
+                      console.error('Error saving notes:', error);
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Notes are automatically saved when you click away
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -331,6 +376,49 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
                     <p className="font-medium">{device.isSupervised ? 'Supervised' : 'Not Supervised'}</p>
                   </div>
                 </div>
+
+                {/* Phase 2 New Fields */}
+                <div className="p-4 rounded-lg border">
+                  <p className="text-sm font-medium text-muted-foreground">Grace Period</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Calendar className="h-5 w-5 text-blue-500" />
+                    <p className="font-medium text-sm">
+                      {device.complianceGracePeriodExpiration 
+                        ? new Date(device.complianceGracePeriodExpiration).toLocaleDateString()
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Compliance grace period
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-lg border">
+                  <p className="text-sm font-medium text-muted-foreground">Threat State</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Shield className="h-5 w-5 text-yellow-500" />
+                    <p className="font-medium text-sm capitalize">
+                      {device.partnerReportedThreatState || 'Unknown'}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Partner-reported threat detection
+                  </p>
+                </div>
+
+                {device.jailBroken && (
+                  <div className="p-4 rounded-lg border">
+                    <p className="text-sm font-medium text-muted-foreground">Jailbroken</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      {device.jailBroken === 'Unknown' ? (
+                        <XCircle className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-500" />
+                      )}
+                      <p className="font-medium text-sm capitalize">{device.jailBroken}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {device.complianceDetails && (
@@ -406,6 +494,32 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
               </CardContent>
             </Card>
           </div>
+
+          {/* Phase 2: Mobile Device Information */}
+          {(device.imei || device.phoneNumber) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Monitor className="h-5 w-5" />
+                  Mobile Device Info
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {device.imei && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">IMEI</p>
+                    <p className="text-sm font-mono">{device.imei}</p>
+                  </div>
+                )}
+                {device.phoneNumber && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Phone Number</p>
+                    <p className="text-sm font-mono">{device.phoneNumber}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Network Tab */}

@@ -115,6 +115,10 @@ export async function GET(request: NextRequest) {
         complianceState: devices.complianceState,
         isEncrypted: devices.isEncrypted,
         isSupervised: devices.isSupervised,
+        jailBroken: devices.jailBroken,
+        // Phase 2 new columns: compliance & security
+        complianceGracePeriodExpiration: devices.complianceGracePeriodExpiration,
+        partnerReportedThreatState: devices.partnerReportedThreatState,
         userPrincipalName: devices.userPrincipalName,
         userDisplayName: devices.userDisplayName,
         userEmail: devices.userEmail,
@@ -123,6 +127,10 @@ export async function GET(request: NextRequest) {
         storageFree: devices.storageFree,
         memoryTotal: devices.memoryTotal,
         chassisType: devices.chassisType,
+        // Phase 2 new columns: mobile device fields
+        imei: devices.imei,
+        phoneNumber: devices.phoneNumber,
+        notes: devices.notes,
         ipAddressV4: devices.ipAddressV4,
         wifiMac: devices.wifiMac,
         ethernetMac: devices.ethernetMac,
