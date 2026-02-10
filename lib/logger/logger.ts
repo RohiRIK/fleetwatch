@@ -182,16 +182,16 @@ class InMemoryLogStore implements ILogStore {
       filtered = filtered.filter((log) => options.level!.includes(log.level));
     }
 
-    // Filter by search term
-    if (options.search) {
-      const searchLower = options.search.toLowerCase();
-      filtered = filtered.filter(
-        (log) =>
-          log.message.toLowerCase().includes(searchLower) ||
-          log.context?.toLowerCase().includes(searchLower) ||
-          JSON.stringify(log.metadata).toLowerCase().includes(searchLower)
-      );
-    }
+      // Filter by search term
+      if (options.search) {
+        const searchLower = options.search.toLowerCase();
+        filtered = filtered.filter(
+          (log) =>
+            log.message.toLowerCase().includes(searchLower) ||
+            log.context?.toLowerCase().includes(searchLower) ||
+            (log.metadata && JSON.stringify(log.metadata).toLowerCase().includes(searchLower))
+        );
+      }
 
     // Sort by timestamp descending (newest first)
     filtered.sort(
