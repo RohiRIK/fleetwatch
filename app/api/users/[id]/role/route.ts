@@ -12,7 +12,7 @@ import { log } from "@/lib/logger/logger";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Protect route - only SUPERADMIN can update roles
   const { error, session } = await protectRouteWithRole("SUPERADMIN");
@@ -20,7 +20,7 @@ export async function PATCH(
 
   try {
     const { role } = await request.json();
-    const userId = params.id;
+    const { id: userId } = await params;
 
     // Validate role
     if (!["VIEWER", "ADMIN", "SUPERADMIN"].includes(role)) {
