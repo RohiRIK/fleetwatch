@@ -3,6 +3,7 @@ import { db } from '@/lib/db/drizzle';
 import { devices } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { protectRouteWithPermission } from '@/lib/auth/api-rbac';
+import { auditDeviceNotesUpdate } from '@/lib/services/auditLog';
 
 export async function GET(
   request: NextRequest,
@@ -105,15 +106,15 @@ export async function PATCH(
       .where(eq(devices.id, id))
       .limit(1);
 
-    // Audit log
-    console.log('[AUDIT] Device notes updated', {
-      deviceId: id,
-      deviceName: oldDevice.deviceName,
-      oldNotes: oldDevice.notes,
-      newNotes: body.notes,
-      updatedBy: session?.user?.email,
-      updatedAt: new Date().toISOString(),
-    });
+    // Persistent audit log (replaces console.log from Phase 5)
+    await auditDeviceNotesUpdate(
+      id,
+      oldDevice.deviceName || 'Unknown Device',
+      oldDevice.notes || null,
+      body.notes,
+      session?.user?.email || 'unknown@example.com',
+      session?.user?.id
+    );
 
     return NextResponse.json({
       success: true,

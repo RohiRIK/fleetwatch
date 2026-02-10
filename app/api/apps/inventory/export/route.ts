@@ -3,6 +3,7 @@ import { db } from '@/lib/db/drizzle';
 import { devices } from '@/lib/db/schema';
 import { isNull } from 'drizzle-orm';
 import { protectRouteWithPermission } from '@/lib/auth/api-rbac';
+import { auditAppInventoryExport } from '@/lib/services/auditLog';
 
 /**
  * GET /api/apps/inventory/export
@@ -142,14 +143,14 @@ export async function GET(request: Request) {
       ...rows.map(row => row.join(',')),
     ].join('\n');
 
-    // Audit log
-    console.log('[AUDIT] App inventory exported', {
-      exportedBy: session?.user?.email,
-      exportedAt: new Date().toISOString(),
-      appCount: apps.length,
-      totalDevices: allDevices.length,
-      filters: { search, minInstalls },
-    });
+    // Persistent audit log (replaces console.log from Phase 5)
+    await auditAppInventoryExport(
+      session?.user?.email || 'unknown@example.com',
+      apps.length,
+      allDevices.length,
+      { search, minInstalls },
+      session?.user?.id
+    );
 
     // Return CSV file
     return new NextResponse(csvContent, {

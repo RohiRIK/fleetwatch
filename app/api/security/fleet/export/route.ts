@@ -3,6 +3,7 @@ import { db } from '@/lib/db/drizzle';
 import { devices } from '@/lib/db/schema';
 import { isNull } from 'drizzle-orm';
 import { protectRouteWithPermission } from '@/lib/auth/api-rbac';
+import { auditSecurityExport } from '@/lib/services/auditLog';
 
 /**
  * GET /api/security/fleet/export
@@ -84,12 +85,12 @@ export async function GET() {
       ...rows.map(row => row.join(',')),
     ].join('\n');
 
-    // Audit log
-    console.log('[AUDIT] Security data exported', {
-      exportedBy: session?.user?.email,
-      exportedAt: new Date().toISOString(),
-      deviceCount: allDevices.length,
-    });
+    // Persistent audit log (replaces console.log from Phase 5)
+    await auditSecurityExport(
+      session?.user?.email || 'unknown@example.com',
+      allDevices.length,
+      session?.user?.id
+    );
 
     // Return CSV file
     return new NextResponse(csvContent, {
