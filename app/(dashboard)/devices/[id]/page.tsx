@@ -27,6 +27,13 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
+// Phase 3: New device detail cards
+import { HardwareDeepDiveCard } from '@/components/device-detail/HardwareDeepDiveCard';
+import { ManagementStatusCard } from '@/components/device-detail/ManagementStatusCard';
+import { SecurityHardwareCard } from '@/components/device-detail/SecurityHardwareCard';
+import { ExchangeActiveSyncCard } from '@/components/device-detail/ExchangeActiveSyncCard';
+import { MalwareProtectionCard } from '@/components/device-detail/MalwareProtectionCard';
+
 interface Device {
   id: string;
   azureId: string;
@@ -74,6 +81,42 @@ interface Device {
   securityDetails: any;
   dataQuality: any;
   ingestionMetadata: any;
+  
+  // Phase 3 new fields - hardware deep dive
+  meid: string | null;
+  iccid: string | null;
+  udid: string | null;
+  subscriberCarrier: string | null;
+  batterySerialNumber: string | null;
+  batteryChargeCycles: number | null;
+  batteryLevelPercentage: number | null;
+  residentUsersCount: number | null;
+  productName: string | null;
+  deviceFullQualifiedDomainName: string | null;
+  
+  // Phase 3 new fields - management
+  managementAgent: string | null;
+  managementCertificateExpirationDate: string | null;
+  managementFeatures: string | null;
+  remoteAssistanceSessionUrl: string | null;
+  remoteAssistanceSessionErrorDetails: string | null;
+  requireUserEnrollmentApproval: boolean | null;
+  enrollmentProfileName: string | null;
+  
+  // Phase 3 new fields - security hardware
+  tpmPresent: boolean | null;
+  secureBootEnabled: boolean | null;
+  codeIntegrityEnabled: boolean | null;
+  bootDebuggingEnabled: boolean | null;
+  
+  // Phase 3 new fields - Exchange ActiveSync
+  easActivated: boolean | null;
+  easDeviceId: string | null;
+  exchangeLastSuccessfulSyncDateTime: string | null;
+  
+  // Phase 3 new fields - malware
+  malwareActiveCount: number | null;
+  malwareRemediatedCount: number | null;
 }
 
 export default function DeviceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -424,12 +467,104 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
               {device.complianceDetails && (
                 <div className="mt-4">
                   <h3 className="font-medium mb-2">Compliance Policies</h3>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {Array.isArray(device.complianceDetails) && device.complianceDetails.length > 0 ? (
                       device.complianceDetails.map((policy: any, index: number) => (
                         <div key={index} className="p-3 rounded-lg border">
-                          <p className="font-medium text-sm">{policy.displayName || 'Policy ' + (index + 1)}</p>
-                          <p className="text-xs text-muted-foreground">{policy.state || 'Unknown state'}</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="font-medium text-sm">{policy.displayName || 'Policy ' + (index + 1)}</p>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              policy.state === 'compliant' ? 'bg-green-100 text-green-800' :
+                              policy.state === 'nonCompliant' ? 'bg-red-100 text-red-800' :
+                              policy.state === 'error' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {policy.state || 'Unknown'}
+                            </span>
+                          </div>
+                          
+                          {/* Show policy settings if available */}
+                          {policy.policySettings && (
+                            <div className="mt-3 pl-3 border-l-2 border-muted">
+                              <p className="text-xs font-medium text-muted-foreground mb-2">Policy Requirements:</p>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {policy.policySettings.bitLockerEnabled !== undefined && (
+                                  <div className="flex items-center gap-1">
+                                    {policy.policySettings.bitLockerEnabled ? (
+                                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                    <span>BitLocker</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.secureBootEnabled !== undefined && (
+                                  <div className="flex items-center gap-1">
+                                    {policy.policySettings.secureBootEnabled ? (
+                                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                    <span>Secure Boot</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.codeIntegrityEnabled !== undefined && (
+                                  <div className="flex items-center gap-1">
+                                    {policy.policySettings.codeIntegrityEnabled ? (
+                                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                    <span>Code Integrity</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.osMinimumVersion && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Min OS:</span>
+                                    <span>{policy.policySettings.osMinimumVersion}</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.osMaximumVersion && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Max OS:</span>
+                                    <span>{policy.policySettings.osMaximumVersion}</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.passwordRequired !== undefined && (
+                                  <div className="flex items-center gap-1">
+                                    {policy.policySettings.passwordRequired ? (
+                                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                    <span>Password Required</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.passwordMinimumLength && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-muted-foreground">Min Password:</span>
+                                    <span>{policy.policySettings.passwordMinimumLength} chars</span>
+                                  </div>
+                                )}
+                                {policy.policySettings.storageRequireEncryption !== undefined && (
+                                  <div className="flex items-center gap-1">
+                                    {policy.policySettings.storageRequireEncryption ? (
+                                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                    <span>Storage Encryption</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {policy.settingCount && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {policy.settingCount} settings checked
+                            </p>
+                          )}
                         </div>
                       ))
                     ) : (
@@ -520,6 +655,66 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
               </CardContent>
             </Card>
           )}
+
+          {/* Phase 3: Extended Hardware Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Hardware Deep Dive */}
+            <HardwareDeepDiveCard 
+              data={{
+                meid: device.meid,
+                iccid: device.iccid,
+                udid: device.udid,
+                subscriberCarrier: device.subscriberCarrier,
+                batterySerialNumber: device.batterySerialNumber,
+                batteryChargeCycles: device.batteryChargeCycles,
+                batteryLevelPercentage: device.batteryLevelPercentage,
+                residentUsersCount: device.residentUsersCount,
+                productName: device.productName,
+                deviceFullQualifiedDomainName: device.deviceFullQualifiedDomainName,
+              }}
+            />
+
+            {/* Management Status */}
+            <ManagementStatusCard
+              data={{
+                managementAgent: device.managementAgent,
+                managementCertificateExpirationDate: device.managementCertificateExpirationDate ? new Date(device.managementCertificateExpirationDate) : null,
+                managementFeatures: device.managementFeatures,
+                remoteAssistanceSessionUrl: device.remoteAssistanceSessionUrl,
+                remoteAssistanceSessionErrorDetails: device.remoteAssistanceSessionErrorDetails,
+                requireUserEnrollmentApproval: device.requireUserEnrollmentApproval,
+                enrollmentProfileName: device.enrollmentProfileName,
+              }}
+            />
+
+            {/* Security Hardware */}
+            <SecurityHardwareCard
+              data={{
+                tpmPresent: device.tpmPresent,
+                secureBootEnabled: device.secureBootEnabled,
+                codeIntegrityEnabled: device.codeIntegrityEnabled,
+                bootDebuggingEnabled: device.bootDebuggingEnabled,
+              }}
+            />
+
+            {/* Exchange ActiveSync */}
+            <ExchangeActiveSyncCard
+              data={{
+                easActivated: device.easActivated,
+                easDeviceId: device.easDeviceId,
+                exchangeLastSuccessfulSyncDateTime: device.exchangeLastSuccessfulSyncDateTime ? new Date(device.exchangeLastSuccessfulSyncDateTime) : null,
+              }}
+            />
+
+            {/* Malware Protection */}
+            <MalwareProtectionCard
+              data={{
+                malwareActiveCount: device.malwareActiveCount,
+                malwareRemediatedCount: device.malwareRemediatedCount,
+              }}
+              className="md:col-span-2"
+            />
+          </div>
         </TabsContent>
 
         {/* Network Tab */}

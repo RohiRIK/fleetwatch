@@ -19,13 +19,13 @@ export function getGraphClient(): Client {
     return graphClient;
   }
 
-  const tenantId = process.env.AZURE_AD_TENANT_ID;
-  const clientId = process.env.AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+  const tenantId = process.env.ENTRA_TENANT_ID;
+  const clientId = process.env.ENTRA_CLIENT_ID;
+  const clientSecret = process.env.ENTRA_CLIENT_SECRET;
 
   if (!tenantId || !clientId || !clientSecret) {
     throw new Error(
-      'Missing Azure AD credentials. Please set AZURE_AD_TENANT_ID, AZURE_AD_CLIENT_ID, and AZURE_AD_CLIENT_SECRET in .env.local'
+      'Missing Microsoft Entra ID credentials. Please set ENTRA_TENANT_ID, ENTRA_CLIENT_ID, and ENTRA_CLIENT_SECRET in .env.local'
     );
   }
 
@@ -521,5 +521,150 @@ export async function testGraphConnection(): Promise<{
       success: false,
       message: error.message || 'Failed to connect to Microsoft Graph API',
     };
+  }
+}
+
+/**
+ * Get license details for a specific user
+ * 
+ * @param userId Azure AD user ID (or userPrincipalName)
+ * @returns Array of license detail objects
+ */
+export async function getUserLicenseDetails(userId: string): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api(`/users/${userId}/licenseDetails`)
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error(`[Graph API] Failed to fetch license details for user ${userId}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Get named locations for Conditional Access
+ * 
+ * @returns Array of named location objects
+ */
+export async function getNamedLocations(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/identity/conditionalAccess/namedLocations')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch named locations:', error);
+    return [];
+  }
+}
+
+/**
+ * Get device compliance policies from Intune (global list)
+ * 
+ * @returns Array of compliance policy objects
+ */
+export async function getDeviceCompliancePoliciesList(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceManagement/deviceCompliancePolicies')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch compliance policies:', error);
+    return [];
+  }
+}
+
+/**
+ * Get device configurations from Intune
+ * 
+ * @returns Array of device configuration objects
+ */
+export async function getDeviceConfigurations(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceManagement/deviceConfigurations')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch device configurations:', error);
+    return [];
+  }
+}
+
+/**
+ * Get configuration policies from Intune (beta endpoint)
+ * These are the newer configuration policies
+ * 
+ * @returns Array of configuration policy objects
+ */
+export async function getConfigurationPolicies(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceManagement/configurationPolicies')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch configuration policies:', error);
+    return [];
+  }
+}
+
+/**
+ * Get a specific device compliance policy with all its settings
+ * This provides the detailed compliance rules configured in the policy
+ * 
+ * @param policyId The compliance policy ID
+ * @returns Policy object with settings
+ */
+export async function getDeviceCompliancePolicy(policyId: string): Promise<any | null> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api(`/deviceManagement/deviceCompliancePolicies/${policyId}`)
+      .get();
+
+    return response || null;
+  } catch (error: any) {
+    console.error(`[Graph API] Failed to fetch compliance policy ${policyId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get device compliance policy setting summaries
+ * Returns aggregated compliance state for each setting across all devices
+ * 
+ * @returns Array of setting state summaries
+ */
+export async function getDeviceCompliancePolicySettingSummaries(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceManagement/deviceCompliancePolicySettingStateSummaries')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch compliance policy setting summaries:', error);
+    return [];
   }
 }

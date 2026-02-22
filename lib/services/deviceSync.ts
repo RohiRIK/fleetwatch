@@ -1,6 +1,7 @@
-import { eq, or, ilike } from 'drizzle-orm';
+import { eq, or, ilike, and } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { devices, users, activityLogs, complianceHistory, storageHistory } from '@/lib/db/schema';
+import { devices, users, activityLogs, complianceHistory, storageHistory, device_groups, user_devices, device_analytics, device_compliance_policies } from '@/lib/db/schema';
+import type { groupTypeEnum } from '@/lib/db/schema';
 import {
   getManagedDevice,
   getManagedDevices,
@@ -78,6 +79,240 @@ async function recordStorageSnapshot(deviceId: string, storageTotal: number | nu
     }
   } catch (error) {
     console.error('[DeviceSync] Failed to record storage history:', error);
+  }
+}
+
+/**
+ * Detect group type from Graph API group object
+ * 
+ * Graph API groups have these properties:
+ * - groupTypes: ['Unified'] = Microsoft 365 group
+ * - securityEnabled: true = Security group
+ * - mailEnabled: true = Mail-enabled
+ * 
+ * @param group Graph API group object
+ * @returns Group type enum value
+ */
+export function detectGroupType(group: {
+  groupTypes?: string[];
+  securityEnabled?: boolean;
+  mailEnabled?: boolean;
+}): typeof groupTypeEnum.enumValues[number] {
+  const hasUnified = group.groupTypes?.includes('Unified');
+  const isSecurityEnabled = group.securityEnabled ?? false;
+  const isMailEnabled = group.mailEnabled ?? false;
+
+  if (hasUnified) {
+    return 'microsoft_365';
+  }
+
+  if (isSecurityEnabled && isMailEnabled) {
+    return 'mail_enabled_security';
+  }
+
+  if (isMailEnabled && !isSecurityEnabled) {
+    return 'distribution';
+  }
+
+  return 'security';
+}
+
+/**
+ * Upsert device groups to database
+ * 
+ * Deletes existing groups for the device, then inserts new ones.
+ * This ensures group memberships are always in sync with Azure AD.
+ * 
+ * @param deviceId Internal device ID (UUID)
+ * @param groups Array of group objects from Graph API
+ */
+export async function upsertDeviceGroups(
+  deviceId: string,
+  groups: Array<{
+    id: string;
+    displayName?: string;
+    groupTypes?: string[];
+    securityEnabled?: boolean;
+    mailEnabled?: boolean;
+    membershipRule?: string | null;
+    description?: string | null;
+  }> | null
+): Promise<void> {
+  if (!groups || groups.length === 0) {
+    await db.delete(device_groups).where(eq(device_groups.deviceId, deviceId));
+    console.log(`[DeviceSync] Cleared groups for device ${deviceId} (no groups)`);
+    return;
+  }
+
+  try {
+    await db.delete(device_groups).where(eq(device_groups.deviceId, deviceId));
+
+    for (const group of groups) {
+      try {
+        await db.insert(device_groups).values({
+          deviceId,
+          groupId: group.id,
+          groupName: group.displayName || 'Unknown Group',
+          groupType: detectGroupType(group),
+          description: group.description || null,
+          isDynamic: !!group.membershipRule,
+          membershipRule: group.membershipRule || null,
+        });
+      } catch (insertError) {
+        console.error(`[DeviceSync] Failed to insert group ${group.id} for device ${deviceId}:`, insertError);
+      }
+    }
+
+    console.log(`[DeviceSync] Upserted ${groups.length} groups for device ${deviceId}`);
+  } catch (error) {
+    console.error(`[DeviceSync] Failed to upsert groups for device ${deviceId}:`, error);
+  }
+}
+
+/**
+ * Create or update user-device junction record
+ * 
+ * Creates a many-to-many relationship between users and devices.
+ * Supports primary device flagging and relationship types.
+ * 
+ * @param userId Internal user ID (UUID) or null
+ * @param deviceId Internal device ID (UUID) or null
+ * @param isPrimary Whether this is the user's primary device
+ * @param relationshipType Type of relationship (owner, user, shared)
+ */
+export async function upsertUserDevice(
+  userId: string | null,
+  deviceId: string | null,
+  isPrimary: boolean = false,
+  relationshipType: 'owner' | 'user' | 'shared' = 'owner'
+): Promise<void> {
+  if (!userId || !deviceId) {
+    return;
+  }
+
+  try {
+    const existing = await db
+      .select()
+      .from(user_devices)
+      .where(
+        and(
+          eq(user_devices.userId, userId),
+          eq(user_devices.deviceId, deviceId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      console.log(`[DeviceSync] User-device junction already exists: user=${userId}, device=${deviceId}`);
+      return;
+    }
+
+    await db.insert(user_devices).values({
+      userId,
+      deviceId,
+      isPrimary,
+      relationshipType,
+      assignedAt: new Date(),
+    });
+
+    console.log(`[DeviceSync] Created user-device junction: user=${userId}, device=${deviceId}, primary=${isPrimary}, type=${relationshipType}`);
+  } catch (error) {
+    console.error(`[DeviceSync] Failed to create user-device junction:`, error);
+  }
+}
+
+/**
+ * Remove user-device junction record
+ * 
+ * @param userId Internal user ID (UUID) or null
+ * @param deviceId Internal device ID (UUID) or null
+ */
+export async function removeUserDevice(
+  userId: string | null,
+  deviceId: string | null
+): Promise<void> {
+  if (!userId || !deviceId) {
+    return;
+  }
+
+  try {
+    await db
+      .delete(user_devices)
+      .where(
+        and(
+          eq(user_devices.userId, userId),
+          eq(user_devices.deviceId, deviceId)
+        )
+      );
+
+    console.log(`[DeviceSync] Removed user-device junction: user=${userId}, device=${deviceId}`);
+  } catch (error) {
+    console.error(`[DeviceSync] Failed to remove user-device junction:`, error);
+  }
+}
+
+/**
+ * Create or update device analytics record
+ * 
+ * Extracts endpoint analytics scores from Graph API response
+ * and stores them in the device_analytics table.
+ * 
+ * @param deviceId Internal device ID (UUID)
+ * @param analytics Analytics data from Graph API or null
+ */
+export async function upsertDeviceAnalytics(
+  deviceId: string,
+  analytics: any | null
+): Promise<void> {
+  if (!analytics) {
+    return;
+  }
+
+  try {
+    const existing = await db
+      .select()
+      .from(device_analytics)
+      .where(eq(device_analytics.deviceId, deviceId))
+      .limit(1);
+
+    const analyticsData = {
+      deviceId,
+      overallScore: analytics.overallScore ?? null,
+      startupScore: analytics.startupPerformance?.score ?? null,
+      appReliabilityScore: analytics.appReliability?.score ?? null,
+      batteryScore: analytics.batteryHealth?.score ?? null,
+      workFromAnywhereScore: analytics.workFromAnywhere?.score ?? null,
+      coreBootTimeMs: analytics.startupPerformance?.coreBootTimeInMs ?? null,
+      coreLoginTimeMs: analytics.startupPerformance?.coreLoginTimeInMs ?? null,
+      responsiveDesktopTimeMs: analytics.startupPerformance?.responsiveDesktopTimeInMs ?? null,
+      restartCount: analytics.restartCount ?? null,
+      blueScreenCount: analytics.blueScreenCount ?? null,
+      meanTimeToFailureMinutes: analytics.meanTimeToFailureMinutes ?? null,
+      healthStatus: analytics.healthStatus ?? null,
+      diskType: analytics.diskType ?? null,
+      modelPerformance: analytics.modelPerformance ?? null,
+      rawAnalytics: analytics,
+      recordedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    if (existing.length > 0) {
+      await db
+        .update(device_analytics)
+        .set(analyticsData)
+        .where(eq(device_analytics.deviceId, deviceId));
+
+      console.log(`[DeviceSync] Updated device analytics for device ${deviceId}`);
+    } else {
+      await db.insert(device_analytics).values({
+        ...analyticsData,
+        createdAt: new Date(),
+      });
+
+      console.log(`[DeviceSync] Created device analytics for device ${deviceId}`);
+    }
+  } catch (error) {
+    console.error(`[DeviceSync] Failed to upsert device analytics for device ${deviceId}:`, error);
   }
 }
 
@@ -248,6 +483,21 @@ async function syncSingleDevice(
       await recordStorageSnapshot(newDevice.id, deviceData.storageTotal, deviceData.storageFree || null);
     }
     
+    // Upsert device groups if available (deep mode)
+    if (newDevice.id && deviceData.organizationDetails?.groups) {
+      await upsertDeviceGroups(newDevice.id, deviceData.rawGroups || null);
+    }
+    
+    // Create user-device junction if user is assigned
+    if (newDevice.id && deviceData.userId) {
+      await upsertUserDevice(deviceData.userId, newDevice.id, true, 'owner');
+    }
+    
+    // Upsert device analytics if available (deep mode)
+    if (newDevice.id && deviceData.rawAnalytics) {
+      await upsertDeviceAnalytics(newDevice.id, deviceData.rawAnalytics);
+    }
+    
     return { created: true, updated: false };
   } else {
     // Check for compliance state change
@@ -285,6 +535,21 @@ async function syncSingleDevice(
     // Record storage snapshot (always, for trend analysis)
     if (deviceData.storageTotal) {
       await recordStorageSnapshot(existingDevice.id, deviceData.storageTotal, deviceData.storageFree || null);
+    }
+    
+    // Upsert device groups if available (deep mode)
+    if (existingDevice.id && deviceData.organizationDetails?.groups) {
+      await upsertDeviceGroups(existingDevice.id, deviceData.rawGroups || null);
+    }
+    
+    // Create user-device junction if user is assigned (idempotent - skips if exists)
+    if (existingDevice.id && deviceData.userId) {
+      await upsertUserDevice(deviceData.userId, existingDevice.id, false, 'owner');
+    }
+    
+    // Upsert device analytics if available (deep mode)
+    if (existingDevice.id && deviceData.rawAnalytics) {
+      await upsertDeviceAnalytics(existingDevice.id, deviceData.rawAnalytics);
     }
     
     return { created: false, updated: true };
@@ -383,7 +648,48 @@ async function transformDeviceData(rawDevice: any, mode: SyncMode) {
     
     // Store full raw device data
     rawDeviceData: rawDevice,
-    
+
+    // ========== PHASE 3: EXTENDED HARDWARE FIELDS ==========
+    // Hardware deep dive
+    meid: rawDevice.meid || null,
+    iccid: rawDevice.iccid || null,
+    udid: rawDevice.udid || null,
+    subscriberCarrier: rawDevice.subscriberCarrier || null,
+    batterySerialNumber: rawDevice.hardwareInformation?.batterySerialNumber || null,
+    batteryChargeCycles: rawDevice.hardwareInformation?.batteryChargeCycles || null,
+    batteryLevelPercentage: rawDevice.hardwareInformation?.batteryLevelPercentage || null,
+    residentUsersCount: rawDevice.residentUsersCount || null,
+    productName: rawDevice.productName || null,
+    deviceFullQualifiedDomainName: rawDevice.deviceFullQualifiedDomainName || null,
+
+    // Management
+    managementAgent: rawDevice.managementAgent || null,
+    managementCertificateExpirationDate: rawDevice.managementCertificateExpirationDateTime
+      ? new Date(rawDevice.managementCertificateExpirationDateTime)
+      : null,
+    managementFeatures: rawDevice.managementFeatures || null,
+    remoteAssistanceSessionUrl: rawDevice.remoteAssistanceSessionUrl || null,
+    remoteAssistanceSessionErrorDetails: rawDevice.remoteAssistanceSessionErrorDetails || null,
+    requireUserEnrollmentApproval: rawDevice.requireUserEnrollmentApproval || null,
+    enrollmentProfileName: rawDevice.enrollmentProfileName || null,
+
+    // Security hardware
+    tpmPresent: rawDevice.tpmPresent || null,
+    secureBootEnabled: rawDevice.secureBootEnabled || null,
+    codeIntegrityEnabled: rawDevice.codeIntegrityEnabled || null,
+    bootDebuggingEnabled: rawDevice.bootDebuggingEnabled || null,
+
+    // Exchange ActiveSync
+    easActivated: rawDevice.easActivated || null,
+    easDeviceId: rawDevice.easDeviceId || null,
+    exchangeLastSuccessfulSyncDateTime: rawDevice.exchangeLastSuccessfulSyncDateTime
+      ? new Date(rawDevice.exchangeLastSuccessfulSyncDateTime)
+      : null,
+
+    // Malware protection
+    malwareActiveCount: rawDevice.malwareActiveCount || null,
+    malwareRemediatedCount: rawDevice.malwareRemediatedCount || null,
+
     // Timestamps
     lastSyncAt: new Date(),
   };
@@ -417,7 +723,50 @@ async function transformDeviceData(rawDevice: any, mode: SyncMode) {
       ]);
 
       // Enrich JSONB columns
-      deviceData.complianceDetails = compliancePolicies.length > 0 ? compliancePolicies : null;
+      // Enrich compliance policies with policy definition details (settings) from DB
+      const enrichedComplianceDetails = await Promise.all(
+        compliancePolicies.map(async (policyState: any) => {
+          try {
+            // Look up policy definition from synced policies in database
+            const [policyDefinition] = await db
+              .select({ rawPolicyData: device_compliance_policies.rawPolicyData })
+              .from(device_compliance_policies)
+              .where(eq(device_compliance_policies.id, policyState.id))
+              .limit(1);
+            
+            const settings = policyDefinition?.rawPolicyData as any;
+            return {
+              ...policyState,
+              policySettings: settings ? {
+                passwordRequired: settings.passwordRequired,
+                passwordMinimumLength: settings.passwordMinimumLength,
+                passwordExpirationDays: settings.passwordExpirationDays,
+                osMinimumVersion: settings.osMinimumVersion,
+                osMaximumVersion: settings.osMaximumVersion,
+                bitLockerEnabled: settings.bitLockerEnabled,
+                secureBootEnabled: settings.secureBootEnabled,
+                codeIntegrityEnabled: settings.codeIntegrityEnabled,
+                storageRequireEncryption: settings.storageRequireEncryption,
+                requireHealthyDeviceReport: settings.requireHealthyDeviceReport,
+                earlyLaunchAntiMalwareDriverEnabled: settings.earlyLaunchAntiMalwareDriverEnabled,
+                deviceThreatProtectionEnabled: settings.deviceThreatProtectionEnabled,
+                deviceThreatProtectionRequiredSecurityLevel: settings.deviceThreatProtectionRequiredSecurityLevel,
+                passcodeBlockSimple: settings.passcodeBlockSimple,
+                passcodeMinimumLength: settings.passcodeMinimumLength,
+                firewallEnabled: settings.firewallEnabled,
+                fileVaultEnabled: settings.fileVaultEnabled,
+                safetyNetDeviceAttestationEnabled: settings.safetyNetDeviceAttestationEnabled,
+                securityPatchLevelRequired: settings.securityPatchLevelRequired,
+              } : null,
+            };
+          } catch (error) {
+            console.error(`[DeviceSync] Failed to get policy definition for ${policyState.id}:`, error);
+            return policyState;
+          }
+        })
+      );
+      
+      deviceData.complianceDetails = enrichedComplianceDetails.length > 0 ? enrichedComplianceDetails : null;
       deviceData.configurationDetails = configProfiles.length > 0 ? configProfiles : null;
       deviceData.securityDetails = {
         baselines: securityBaselines,
@@ -428,19 +777,23 @@ async function transformDeviceData(rawDevice: any, mode: SyncMode) {
       deviceData.organizationDetails = deviceCategory ? { category: deviceCategory } : null;
       deviceData.detectedAppsDetails = detectedApps.length > 0 ? detectedApps : null;
       deviceData.analyticsDetails = analytics;
+      deviceData.rawAnalytics = analytics;
 
       // Fetch Azure AD groups if we have the Azure AD device ID
+      let rawGroups: any[] = [];
       if (rawDevice.azureAdDeviceId) {
         try {
-          const groups = await getDeviceGroups(rawDevice.azureAdDeviceId);
-          if (groups.length > 0) {
+          rawGroups = await getDeviceGroups(rawDevice.azureAdDeviceId);
+          if (rawGroups.length > 0) {
             deviceData.organizationDetails = {
               ...deviceData.organizationDetails,
-              groups: groups.map((g: any) => ({
+              groups: rawGroups.map((g: any) => ({
                 id: g.id,
                 displayName: g.displayName,
               })),
             };
+            // Store raw groups for device_groups table insertion
+            deviceData.rawGroups = rawGroups;
           }
         } catch (error) {
           console.error(`[DeviceSync] Failed to fetch groups for device ${rawDevice.id}:`, error);

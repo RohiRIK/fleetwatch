@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, boolean, bigint, integer, timestamp, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, bigint, integer, timestamp, jsonb, pgEnum, unique, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Enums
@@ -19,6 +19,22 @@ export const users = pgTable('users', {
   surname: varchar('surname', { length: 255 }), // Last name from Azure AD
   mobilePhone: varchar('mobile_phone', { length: 50 }), // Mobile phone number
   officeLocation: varchar('office_location', { length: 255 }), // Physical office location
+  
+  // ========== PHASE 3: EXTENDED USER FIELDS (15 new columns) ==========
+  employeeId: varchar('employee_id', { length: 100 }), // Employee ID from Azure AD
+  employeeType: varchar('employee_type', { length: 50 }), // Full-time, Contractor, etc.
+  companyName: varchar('company_name', { length: 255 }), // Company name
+  hireDate: timestamp('hire_date'), // Employment hire date
+  leaveDate: timestamp('leave_date'), // Employment end date
+  usageLocation: varchar('usage_location', { length: 100 }), // Country code
+  onPremisesSyncEnabled: boolean('on_premises_sync_enabled'), // Synced from on-prem AD
+  securityIdentifier: varchar('security_identifier', { length: 255 }), // Windows SID
+  businessPhone: varchar('business_phone', { length: 50 }), // Business phone number
+  totalDevices: integer('total_devices'), // Total managed devices count
+  compliantDevices: integer('compliant_devices'), // Compliant devices count
+  nonCompliantDevices: integer('non_compliant_devices'), // Non-compliant devices count
+  devicesNeedingAttention: integer('devices_needing_attention'), // Devices with issues
+  lastSignInDateTime: timestamp('last_sign_in_date_time'), // Last successful sign-in
   azureId: varchar('azure_id', { length: 255 }).unique(),
   passwordHash: varchar('password_hash', { length: 255 }), // For emergency admin fallback
   role: userRoleEnum('role').notNull().default('VIEWER'), // User's system role
@@ -34,6 +50,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   activityLogs: many(activityLogs),
   accounts: many(accounts),
   sessions: many(sessions),
+  licenses: many(user_licenses),
+  userDevices: many(user_devices),
 }));
 
 // ============================================================================
@@ -119,6 +137,43 @@ export const devices = pgTable('devices', {
   // Ingestion metadata
   ingestionMetadata: jsonb('ingestion_metadata'), // When/how synced
   
+  // ========== PHASE 3: EXTENDED HARDWARE (25 new columns) ==========
+  // Hardware deep dive fields
+  meid: varchar('meid', { length: 50 }), // Mobile Equipment Identifier
+  iccid: varchar('iccid', { length: 50 }), // SIM card identifier
+  udid: varchar('udid', { length: 255 }), // Unique Device Identifier (Apple)
+  subscriberCarrier: varchar('subscriber_carrier', { length: 100 }), // Mobile carrier
+  batterySerialNumber: varchar('battery_serial_number', { length: 100 }),
+  batteryChargeCycles: integer('battery_charge_cycles'),
+  batteryLevelPercentage: integer('battery_level_percentage'),
+  residentUsersCount: integer('resident_users_count'),
+  productName: varchar('product_name', { length: 255 }), // Marketing product name
+  deviceFullQualifiedDomainName: varchar('device_full_qualified_domain_name', { length: 255 }),
+
+  // Management fields
+  managementAgent: varchar('management_agent', { length: 50 }), // mdm, eas, etc.
+  managementCertificateExpirationDate: timestamp('management_certificate_expiration_date'),
+  managementFeatures: varchar('management_features', { length: 255 }),
+  remoteAssistanceSessionUrl: text('remote_assistance_session_url'),
+  remoteAssistanceSessionErrorDetails: text('remote_assistance_session_error_details'),
+  requireUserEnrollmentApproval: boolean('require_user_enrollment_approval'),
+  enrollmentProfileName: varchar('enrollment_profile_name', { length: 255 }),
+
+  // Security hardware fields
+  tpmPresent: boolean('tpm_present'),
+  secureBootEnabled: boolean('secure_boot_enabled'),
+  codeIntegrityEnabled: boolean('code_integrity_enabled'),
+  bootDebuggingEnabled: boolean('boot_debugging_enabled'),
+
+  // Exchange ActiveSync fields
+  easActivated: boolean('eas_activated'),
+  easDeviceId: varchar('eas_device_id', { length: 100 }),
+  exchangeLastSuccessfulSyncDateTime: timestamp('exchange_last_successful_sync_date_time'),
+
+  // Malware protection fields
+  malwareActiveCount: integer('malware_active_count'),
+  malwareRemediatedCount: integer('malware_remediated_count'),
+  
   // ========== TIMESTAMPS ==========
   lastSyncAt: timestamp('last_sync_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -126,11 +181,18 @@ export const devices = pgTable('devices', {
   deletedAt: timestamp('deleted_at'), // Soft delete
 });
 
-export const devicesRelations = relations(devices, ({ one }) => ({
+export const devicesRelations = relations(devices, ({ one, many }) => ({
   user: one(users, {
     fields: [devices.userId],
     references: [users.id],
   }),
+  groups: many(device_groups),
+  userDevices: many(user_devices),
+  analytics: one(device_analytics),
+  warranty: one(device_warranty),
+  compliancePolicyStates: many(device_compliance_policy_states),
+  configurationProfileStates: many(device_configuration_profile_states),
+  conditionalAccess: many(device_conditional_access),
 }));
 
 // ============================================================================
@@ -347,6 +409,356 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 }));
 
 // ============================================================================
+// PHASE 3: NEW ENUMS
+// ============================================================================
+
+export const warrantyStatusEnum = pgEnum('warranty_status', ['active', 'expired', 'unknown']);
+export const groupTypeEnum = pgEnum('group_type', ['security', 'microsoft_365', 'distribution', 'mail_enabled_security']);
+export const licenseStatusEnum = pgEnum('license_status', ['enabled', 'warning', 'suspended', 'deleted']);
+export const policyStateEnum = pgEnum('policy_state', ['enabled', 'disabled', 'enabledForReportingButNotEnforced']);
+export const policyPlatformTypeEnum = pgEnum('policy_platform_type', ['android', 'iOS', 'windows', 'macOS', 'linux', 'unknown']);
+export const namedLocationTypeEnum = pgEnum('named_location_type', ['ip', 'country']);
+
+// ============================================================================
+// DEVICE_GROUPS TABLE - Entra ID group memberships
+// ============================================================================
+
+export const device_groups = pgTable('device_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: uuid('device_id').notNull().references(() => devices.id, { onDelete: 'cascade' }),
+  groupId: varchar('group_id', { length: 255 }).notNull(),
+  groupName: varchar('group_name', { length: 255 }).notNull(),
+  groupType: groupTypeEnum('group_type').notNull().default('security'),
+  description: text('description'),
+  isDynamic: boolean('is_dynamic').default(false),
+  membershipRule: text('membership_rule'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  deviceGroupUnique: unique().on(table.deviceId, table.groupId),
+}));
+
+export const deviceGroupsRelations = relations(device_groups, ({ one }) => ({
+  device: one(devices, {
+    fields: [device_groups.deviceId],
+    references: [devices.id],
+  }),
+}));
+
+// ============================================================================
+// USER_LICENSES TABLE - License assignments with SKU details
+// ============================================================================
+
+export const user_licenses = pgTable('user_licenses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  skuId: varchar('sku_id', { length: 255 }).notNull(),
+  skuPartNumber: varchar('sku_part_number', { length: 255 }).notNull(),
+  skuName: varchar('sku_name', { length: 255 }),
+  capabilityStatus: licenseStatusEnum('capability_status').notNull().default('enabled'),
+  servicePlans: jsonb('service_plans').$type<Array<{
+    servicePlanId: string;
+    servicePlanName: string;
+    provisioningStatus: string;
+    appliesTo: string;
+  }>>(),
+  prepaidUnitsEnabled: integer('prepaid_units_enabled'),
+  prepaidUnitsSuspended: integer('prepaid_units_suspended'),
+  prepaidUnitsWarning: integer('prepaid_units_warning'),
+  consumedUnits: integer('consumed_units'),
+  assignedAt: timestamp('assigned_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userLicenseUnique: unique().on(table.userId, table.skuId),
+}));
+
+export const userLicensesRelations = relations(user_licenses, ({ one }) => ({
+  user: one(users, {
+    fields: [user_licenses.userId],
+    references: [users.id],
+  }),
+}));
+
+// ============================================================================
+// USER_DEVICES TABLE - Many-to-many junction table
+// ============================================================================
+
+export const user_devices = pgTable('user_devices', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  deviceId: uuid('device_id').notNull().references(() => devices.id, { onDelete: 'cascade' }),
+  isPrimary: boolean('is_primary').default(false),
+  assignedAt: timestamp('assigned_at'),
+  relationshipType: varchar('relationship_type', { length: 50 }), // 'owner', 'user', 'shared'
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.deviceId] }),
+}));
+
+export const userDevicesRelations = relations(user_devices, ({ one }) => ({
+  user: one(users, {
+    fields: [user_devices.userId],
+    references: [users.id],
+  }),
+  device: one(devices, {
+    fields: [user_devices.deviceId],
+    references: [devices.id],
+  }),
+}));
+
+// ============================================================================
+// DEVICE_ANALYTICS TABLE - Endpoint analytics scores
+// ============================================================================
+
+export const device_analytics = pgTable('device_analytics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: uuid('device_id').notNull().references(() => devices.id, { onDelete: 'cascade' }).unique(),
+  overallScore: integer('overall_score'),
+  startupScore: integer('startup_score'),
+  appReliabilityScore: integer('app_reliability_score'),
+  batteryScore: integer('battery_score'),
+  workFromAnywhereScore: integer('work_from_anywhere_score'),
+  coreBootTimeMs: integer('core_boot_time_ms'),
+  coreLoginTimeMs: integer('core_login_time_ms'),
+  responsiveDesktopTimeMs: integer('responsive_desktop_time_ms'),
+  restartCount: integer('restart_count'),
+  blueScreenCount: integer('blue_screen_count'),
+  meanTimeToFailureMinutes: integer('mean_time_to_failure_minutes'),
+  healthStatus: varchar('health_status', { length: 50 }),
+  diskType: varchar('disk_type', { length: 50 }),
+  modelPerformance: jsonb('model_performance'),
+  rawAnalytics: jsonb('raw_analytics'),
+  recordedAt: timestamp('recorded_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const deviceAnalyticsRelations = relations(device_analytics, ({ one }) => ({
+  device: one(devices, {
+    fields: [device_analytics.deviceId],
+    references: [devices.id],
+  }),
+}));
+
+// ============================================================================
+// DEVICE_WARRANTY TABLE - Warranty status and expiration
+// ============================================================================
+
+export const device_warranty = pgTable('device_warranty', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: uuid('device_id').notNull().references(() => devices.id, { onDelete: 'cascade' }).unique(),
+  status: warrantyStatusEnum('status').notNull().default('unknown'),
+  startDate: timestamp('start_date'),
+  endDate: timestamp('end_date'),
+  daysRemaining: integer('days_remaining'),
+  inWarranty: boolean('in_warranty').default(false),
+  vendor: varchar('vendor', { length: 255 }),
+  warrantyType: varchar('warranty_type', { length: 100 }),
+  coverageType: varchar('coverage_type', { length: 100 }),
+  description: text('description'),
+  serialNumber: varchar('serial_number', { length: 255 }),
+  rawWarrantyData: jsonb('raw_warranty_data'),
+  lastCheckedAt: timestamp('last_checked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const deviceWarrantyRelations = relations(device_warranty, ({ one }) => ({
+  device: one(devices, {
+    fields: [device_warranty.deviceId],
+    references: [devices.id],
+  }),
+}));
+
+// ============================================================================
+// CONDITIONAL ACCESS POLICIES TABLE - Global CA policies from Entra ID
+// ============================================================================
+
+export const conditional_access_policies = pgTable('conditional_access_policies', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  displayName: varchar('display_name', { length: 255 }).notNull(),
+  description: text('description'),
+  state: policyStateEnum('state').notNull().default('disabled'),
+  createdDateTime: timestamp('created_date_time'),
+  modifiedDateTime: timestamp('modified_date_time'),
+  conditions: jsonb('conditions'),
+  grantControls: jsonb('grant_controls'),
+  sessionControls: jsonb('session_controls'),
+  isEnabled: boolean('is_enabled').default(false),
+  isReportOnly: boolean('is_report_only').default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const conditionalAccessPoliciesRelations = relations(conditional_access_policies, ({ many }) => ({
+  devicePolicies: many(device_conditional_access),
+}));
+
+// ============================================================================
+// NAMED LOCATIONS TABLE - CA named locations (IP ranges, countries)
+// ============================================================================
+
+export const named_locations = pgTable('named_locations', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  displayName: varchar('display_name', { length: 255 }).notNull(),
+  locationType: namedLocationTypeEnum('location_type').notNull(),
+  isTrusted: boolean('is_trusted').default(false),
+  ipRanges: jsonb('ip_ranges').$type<Array<{ cidrAddress: string }>>(),
+  countriesAndRegions: jsonb('countries_and_regions').$type<string[]>(),
+  includeUnknownCountriesAndRegions: boolean('include_unknown_countries_and_regions'),
+  createdDateTime: timestamp('created_date_time'),
+  modifiedDateTime: timestamp('modified_date_time'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const namedLocationsRelations = relations(named_locations, ({ many }) => ({
+  policies: many(conditional_access_policies),
+}));
+
+// ============================================================================
+// DEVICE COMPLIANCE POLICIES TABLE - Intune compliance policies
+// ============================================================================
+
+export const device_compliance_policies = pgTable('device_compliance_policies', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  odataType: varchar('odata_type', { length: 255 }),
+  displayName: varchar('display_name', { length: 255 }).notNull(),
+  description: text('description'),
+  platformType: policyPlatformTypeEnum('platform_type').notNull().default('unknown'),
+  version: integer('version'),
+  createdDateTime: timestamp('created_date_time'),
+  modifiedDateTime: timestamp('modified_date_time'),
+  settingCount: integer('setting_count'),
+  priority: integer('priority'),
+  isAssigned: boolean('is_assigned').default(false),
+  assignmentCount: integer('assignment_count'),
+  deviceComplianceSettingStateSummaries: jsonb('device_compliance_setting_state_summaries'),
+  scheduledActionsForRule: jsonb('scheduled_actions_for_rule'),
+  rawPolicyData: jsonb('raw_policy_data'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const deviceCompliancePoliciesRelations = relations(device_compliance_policies, ({ many }) => ({
+  deviceStates: many(device_compliance_policy_states),
+}));
+
+// ============================================================================
+// DEVICE COMPLIANCE POLICY STATES TABLE - Per-device compliance state
+// ============================================================================
+
+export const device_compliance_policy_states = pgTable('device_compliance_policy_states', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }),
+  policyId: varchar('policy_id', { length: 255 }).references(() => device_compliance_policies.id, { onDelete: 'cascade' }),
+  policyName: varchar('policy_name', { length: 255 }),
+  platformType: policyPlatformTypeEnum('platform_type').notNull().default('unknown'),
+  state: varchar('state', { length: 50 }),
+  errorCode: integer('error_code'),
+  errorDescription: text('error_description'),
+  lastReportedDateTime: timestamp('last_reported_date_time'),
+  complianceGracePeriodExpirationDateTime: timestamp('compliance_grace_period_expiration_date_time'),
+  reportedDateTime: timestamp('reported_date_time').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  devicePolicyUnique: unique().on(table.deviceId, table.policyId),
+}));
+
+export const deviceCompliancePolicyStatesRelations = relations(device_compliance_policy_states, ({ one }) => ({
+  device: one(devices, {
+    fields: [device_compliance_policy_states.deviceId],
+    references: [devices.id],
+  }),
+  policy: one(device_compliance_policies, {
+    fields: [device_compliance_policy_states.policyId],
+    references: [device_compliance_policies.id],
+  }),
+}));
+
+// ============================================================================
+// DEVICE CONFIGURATION PROFILES TABLE - Intune configuration profiles
+// ============================================================================
+
+export const device_configuration_profiles = pgTable('device_configuration_profiles', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  odataType: varchar('odata_type', { length: 255 }),
+  displayName: varchar('display_name', { length: 255 }).notNull(),
+  description: text('description'),
+  platformType: policyPlatformTypeEnum('platform_type').notNull().default('unknown'),
+  profileType: varchar('profile_type', { length: 100 }),
+  version: integer('version'),
+  createdDateTime: timestamp('created_date_time'),
+  modifiedDateTime: timestamp('modified_date_time'),
+  assignmentCount: integer('assignment_count'),
+  isAssigned: boolean('is_assigned').default(false),
+  lastModifiedDateTime: timestamp('last_modified_date_time'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const deviceConfigurationProfilesRelations = relations(device_configuration_profiles, ({ many }) => ({
+  deviceStates: many(device_configuration_profile_states),
+}));
+
+// ============================================================================
+// DEVICE CONFIGURATION PROFILE STATES TABLE - Per-device config state
+// ============================================================================
+
+export const device_configuration_profile_states = pgTable('device_configuration_profile_states', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }),
+  profileId: varchar('profile_id', { length: 255 }).references(() => device_configuration_profiles.id, { onDelete: 'cascade' }),
+  profileName: varchar('profile_name', { length: 255 }),
+  platformType: policyPlatformTypeEnum('platform_type').notNull().default('unknown'),
+  state: varchar('state', { length: 50 }),
+  stateDetail: text('state_detail'),
+  errorCode: integer('error_code'),
+  errorDescription: text('error_description'),
+  reportedDateTime: timestamp('reported_date_time').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  deviceProfileUnique: unique().on(table.deviceId, table.profileId),
+}));
+
+export const deviceConfigurationProfileStatesRelations = relations(device_configuration_profile_states, ({ one }) => ({
+  device: one(devices, {
+    fields: [device_configuration_profile_states.deviceId],
+    references: [devices.id],
+  }),
+  profile: one(device_configuration_profiles, {
+    fields: [device_configuration_profile_states.profileId],
+    references: [device_configuration_profiles.id],
+  }),
+}));
+
+// ============================================================================
+// DEVICE CONDITIONAL ACCESS TABLE - Device to CA policy mapping
+// ============================================================================
+
+export const device_conditional_access = pgTable('device_conditional_access', {
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }),
+  policyId: varchar('policy_id', { length: 255 }).references(() => conditional_access_policies.id, { onDelete: 'cascade' }),
+  isCompliant: boolean('is_compliant'),
+  enforced: boolean('enforced'),
+  sessionTokenIssued: boolean('session_token_issued'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.deviceId, table.policyId] }),
+}));
+
+export const deviceConditionalAccessRelations = relations(device_conditional_access, ({ one }) => ({
+  device: one(devices, {
+    fields: [device_conditional_access.deviceId],
+    references: [devices.id],
+  }),
+  policy: one(conditional_access_policies, {
+    fields: [device_conditional_access.policyId],
+    references: [conditional_access_policies.id],
+  }),
+}));
+
+// ============================================================================
 // TYPE EXPORTS (Generated by Drizzle)
 // ============================================================================
 export type User = typeof users.$inferSelect;
@@ -387,3 +799,39 @@ export type NewSetting = typeof settings.$inferInsert;
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+export type DeviceGroup = typeof device_groups.$inferSelect;
+export type NewDeviceGroup = typeof device_groups.$inferInsert;
+
+export type UserLicense = typeof user_licenses.$inferSelect;
+export type NewUserLicense = typeof user_licenses.$inferInsert;
+
+export type UserDevice = typeof user_devices.$inferSelect;
+export type NewUserDevice = typeof user_devices.$inferInsert;
+
+export type DeviceAnalytics = typeof device_analytics.$inferSelect;
+export type NewDeviceAnalytics = typeof device_analytics.$inferInsert;
+
+export type DeviceWarranty = typeof device_warranty.$inferSelect;
+export type NewDeviceWarranty = typeof device_warranty.$inferInsert;
+
+export type ConditionalAccessPolicy = typeof conditional_access_policies.$inferSelect;
+export type NewConditionalAccessPolicy = typeof conditional_access_policies.$inferInsert;
+
+export type NamedLocation = typeof named_locations.$inferSelect;
+export type NewNamedLocation = typeof named_locations.$inferInsert;
+
+export type DeviceCompliancePolicy = typeof device_compliance_policies.$inferSelect;
+export type NewDeviceCompliancePolicy = typeof device_compliance_policies.$inferInsert;
+
+export type DeviceCompliancePolicyState = typeof device_compliance_policy_states.$inferSelect;
+export type NewDeviceCompliancePolicyState = typeof device_compliance_policy_states.$inferInsert;
+
+export type DeviceConfigurationProfile = typeof device_configuration_profiles.$inferSelect;
+export type NewDeviceConfigurationProfile = typeof device_configuration_profiles.$inferInsert;
+
+export type DeviceConfigurationProfileState = typeof device_configuration_profile_states.$inferSelect;
+export type NewDeviceConfigurationProfileState = typeof device_configuration_profile_states.$inferInsert;
+
+export type DeviceConditionalAccess = typeof device_conditional_access.$inferSelect;
+export type NewDeviceConditionalAccess = typeof device_conditional_access.$inferInsert;
