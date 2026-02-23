@@ -668,3 +668,105 @@ export async function getDeviceCompliancePolicySettingSummaries(): Promise<any[]
     return [];
   }
 }
+
+/**
+ * Get BitLocker recovery keys for a managed device
+ * 
+ * @param deviceId The device ID from Intune
+ * @returns Array of BitLocker recovery key objects
+ */
+export async function getBitLockerRecoveryKeys(deviceId: string): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api(`/deviceManagement/managedDevices/${deviceId}/getBitLockerRecoveryKeys`)
+      .post({});
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error(`[Graph API] Failed to fetch BitLocker recovery keys for device ${deviceId}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Get iOS App Protection policies (MAM)
+ * 
+ * @returns Array of iOS app protection policies
+ */
+export async function getAppProtectionPolicies(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceAppManagement/iosManagedAppProtections')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch app protection policies:', error);
+    return [];
+  }
+}
+
+/**
+ * Get a specific app protection policy by ID
+ * 
+ * @param policyId The policy ID
+ * @returns App protection policy object or null
+ */
+export async function getAppProtectionPolicy(policyId: string): Promise<any | null> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api(`/deviceAppManagement/iosManagedAppProtections/${policyId}`)
+      .get();
+
+    return response || null;
+  } catch (error: any) {
+    console.error(`[Graph API] Failed to fetch app protection policy ${policyId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get Configuration Settings Catalog
+ * 
+ * @returns Array of configuration settings catalog entries
+ */
+export async function getSettingsCatalog(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceManagement/configurationSettingsCatalog')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch settings catalog:', error);
+    return [];
+  }
+}
+
+/**
+ * Get Device Management Intents
+ * 
+ * @returns Array of management intent objects
+ */
+export async function getManagementIntents(): Promise<any[]> {
+  const client = getGraphClient();
+
+  try {
+    const response = await client
+      .api('/deviceManagement/intents')
+      .get();
+
+    return response.value || [];
+  } catch (error: any) {
+    console.error('[Graph API] Failed to fetch management intents:', error);
+    return [];
+  }
+}
