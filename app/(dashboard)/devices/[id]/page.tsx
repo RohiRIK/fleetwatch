@@ -25,6 +25,7 @@ import {
   Database,
   Wifi,
   RefreshCw,
+  Lightbulb,
 } from 'lucide-react';
 
 // Phase 3: New device detail cards
@@ -35,6 +36,7 @@ import { ExchangeActiveSyncCard } from '@/components/device-detail/ExchangeActiv
 import { MalwareProtectionCard } from '@/components/device-detail/MalwareProtectionCard';
 import { ConfigurationProfilesCard } from '@/components/device-detail/ConfigurationProfilesCard';
 import { SecurityCard } from '@/components/device-detail/SecurityCard';
+import { DeviceRecommendations } from '@/components/recommendations/DeviceRecommendations';
 
 interface Device {
   id: string;
@@ -244,6 +246,10 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="hardware">Hardware</TabsTrigger>
           <TabsTrigger value="network">Network</TabsTrigger>
+          <TabsTrigger value="recommendations" className="flex items-center gap-1">
+            <Lightbulb className="h-4 w-4" />
+            Recommendations
+          </TabsTrigger>
           <TabsTrigger value="raw">Raw Data</TabsTrigger>
         </TabsList>
 
@@ -882,6 +888,24 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
                 <p className="text-sm font-medium text-muted-foreground">Ethernet MAC Address</p>
                 <p className="text-sm font-mono">{device.ethernetMac || 'N/A'}</p>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Recommendations Tab */}
+        <TabsContent value="recommendations" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5" />
+                Device Recommendations
+              </CardTitle>
+              <CardDescription>
+                AI-powered recommendations to fix issues on this device
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DeviceRecommendations deviceId={device.id} deviceName={device.deviceName} />
             </CardContent>
           </Card>
         </TabsContent>
