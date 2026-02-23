@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { RecommendationsWidget } from '@/components/recommendations';
 import {
   HardDrive,
   Shield,
@@ -388,6 +389,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recommendations Widget */}
+      <RecommendationsWidget />
 
       {/* Activity Feed & Quick Actions Row */}
       <div className="grid gap-6 md:grid-cols-3">
