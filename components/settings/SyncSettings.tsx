@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
+import { CronBuilder } from './CronBuilder';
 
 type SyncMode = 'full' | 'incremental' | 'deep';
 
@@ -213,22 +214,8 @@ export function SyncSettings() {
 
       {/* Sync Schedule */}
       <div className="space-y-2">
-        <Label htmlFor="sync-schedule">Sync Schedule (Cron Expression)</Label>
-        <Input
-          id="sync-schedule"
-          value={syncSchedule}
-          onChange={(e) => setSyncSchedule(e.target.value)}
-          placeholder="0 */6 * * *"
-          className="max-w-md"
-        />
-        <p className="text-sm text-muted-foreground">
-          Cron expression for sync frequency. Default: <code className="bg-muted px-1 rounded">0 */6 * * *</code> (every 6 hours)
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Common patterns: <code className="bg-muted px-1 rounded">0 * * * *</code> (hourly), 
-          {' '}<code className="bg-muted px-1 rounded">0 */12 * * *</code> (every 12 hours),
-          {' '}<code className="bg-muted px-1 rounded">0 0 * * *</code> (daily at midnight)
-        </p>
+        <Label>Sync Schedule</Label>
+        <CronBuilder value={syncSchedule} onChange={setSyncSchedule} />
       </div>
 
       {/* Sync Mode */}

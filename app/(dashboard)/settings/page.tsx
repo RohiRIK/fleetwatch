@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings as SettingsIcon, RefreshCw, Bell, Cloud, Users, Activity } from 'lucide-react';
+import { Settings as SettingsIcon, RefreshCw, Bell, Cloud, Users, Activity, Database } from 'lucide-react';
 
 // Import setting components (we'll create these next)
 import { SyncSettings } from '@/components/settings/SyncSettings';
@@ -11,6 +11,7 @@ import { NotificationSettings } from '@/components/settings/NotificationSettings
 import { AzureSettings } from '@/components/settings/AzureSettings';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { HealthMonitoring } from '@/components/settings/HealthMonitoring';
+import { SettingsBackupRestore } from '@/components/settings/SettingsBackupRestore';
 
 /**
  * Settings Page
@@ -38,7 +39,7 @@ export default function SettingsPage() {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="sync" className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4" />
             <span className="hidden sm:inline">Sync</span>
@@ -58,6 +59,10 @@ export default function SettingsPage() {
           <TabsTrigger value="health" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             <span className="hidden sm:inline">Health</span>
+          </TabsTrigger>
+          <TabsTrigger value="backup" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">Backup</span>
           </TabsTrigger>
         </TabsList>
 
@@ -132,6 +137,21 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <HealthMonitoring />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Backup/Restore Tab */}
+        <TabsContent value="backup">
+          <Card>
+            <CardHeader>
+              <CardTitle>Backup & Restore</CardTitle>
+              <CardDescription>
+                Export your settings to a JSON file or restore from a previous backup
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SettingsBackupRestore />
             </CardContent>
           </Card>
         </TabsContent>
