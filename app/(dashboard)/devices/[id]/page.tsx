@@ -33,6 +33,8 @@ import { ManagementStatusCard } from '@/components/device-detail/ManagementStatu
 import { SecurityHardwareCard } from '@/components/device-detail/SecurityHardwareCard';
 import { ExchangeActiveSyncCard } from '@/components/device-detail/ExchangeActiveSyncCard';
 import { MalwareProtectionCard } from '@/components/device-detail/MalwareProtectionCard';
+import { ConfigurationProfilesCard } from '@/components/device-detail/ConfigurationProfilesCard';
+import { SecurityCard } from '@/components/device-detail/SecurityCard';
 
 interface Device {
   id: string;
@@ -119,11 +121,36 @@ interface Device {
   malwareRemediatedCount: number | null;
 }
 
+interface DeviceGroup {
+  id: string;
+  groupName: string;
+  groupType: string;
+  description: string | null;
+}
+
+interface UserLicense {
+  id: string;
+  skuName: string | null;
+  skuPartNumber: string;
+  capabilityStatus: string;
+}
+
+interface DeviceAnalytics {
+  overallScore: number | null;
+  startupScore: number | null;
+  appReliabilityScore: number | null;
+  batteryScore: number | null;
+  healthStatus: string | null;
+}
+
 export default function DeviceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
   const id = unwrappedParams.id;
   const router = useRouter();
   const [device, setDevice] = useState<Device | null>(null);
+  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
+  const [userLicenses, setUserLicenses] = useState<UserLicense[]>([]);
+  const [deviceAnalytics, setDeviceAnalytics] = useState<DeviceAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -134,6 +161,9 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
         const data = await response.json();
         if (data.success) {
           setDevice(data.device);
+          setDeviceGroups(data.deviceGroups || []);
+          setUserLicenses(data.userLicenses || []);
+          setDeviceAnalytics(data.deviceAnalytics || null);
         }
       } catch (error) {
         console.error('Failed to load device:', error);
@@ -205,11 +235,13 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
+        {/* Tabs */}
+        <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="compliance">Compliance</TabsTrigger>
+          <TabsTrigger value="configuration">Configuration</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="hardware">Hardware</TabsTrigger>
           <TabsTrigger value="network">Network</TabsTrigger>
           <TabsTrigger value="raw">Raw Data</TabsTrigger>
@@ -269,6 +301,59 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </CardContent>
             </Card>
+
+            {/* Device Groups */}
+            {deviceGroups.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Device Groups
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {deviceGroups.map((group) => (
+                      <div key={group.id} className="flex items-center justify-between p-2 rounded bg-muted">
+                        <div>
+                          <p className="text-sm font-medium">{group.groupName}</p>
+                          {group.description && (
+                            <p className="text-xs text-muted-foreground">{group.description}</p>
+                          )}
+                        </div>
+                        <Badge variant="outline">{group.groupType}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* User Licenses */}
+            {userLicenses.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    User Licenses
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {userLicenses.map((license) => (
+                      <div key={license.id} className="flex items-center justify-between p-2 rounded bg-muted">
+                        <div>
+                          <p className="text-sm font-medium">{license.skuName || license.skuPartNumber}</p>
+                        </div>
+                        <Badge variant={license.capabilityStatus === 'Enabled' ? 'default' : 'secondary'}>
+                          {license.capabilityStatus}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Enrollment Information */}
             <Card>
@@ -577,6 +662,25 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
           </Card>
         </TabsContent>
 
+        {/* Configuration Tab */}
+        <TabsContent value="configuration" className="space-y-4">
+          <ConfigurationProfilesCard 
+            profiles={device.configurationDetails} 
+          />
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security" className="space-y-4">
+          <SecurityCard 
+            data={device.securityDetails}
+            isEncrypted={device.isEncrypted}
+            jailBroken={device.jailBroken}
+            tpmPresent={device.tpmPresent}
+            secureBootEnabled={device.secureBootEnabled}
+            codeIntegrityEnabled={device.codeIntegrityEnabled}
+          />
+        </TabsContent>
+
         {/* Hardware Tab */}
         <TabsContent value="hardware" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -714,6 +818,45 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
               }}
               className="md:col-span-2"
             />
+
+            {/* Device Analytics */}
+            {deviceAnalytics && (
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Device Analytics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 rounded-lg bg-muted">
+                      <p className="text-2xl font-bold">{deviceAnalytics.overallScore ?? 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">Overall Score</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-muted">
+                      <p className="text-2xl font-bold">{deviceAnalytics.startupScore ?? 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">Startup</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-muted">
+                      <p className="text-2xl font-bold">{deviceAnalytics.appReliabilityScore ?? 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">App Reliability</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-muted">
+                      <p className="text-2xl font-bold">{deviceAnalytics.batteryScore ?? 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">Battery</p>
+                    </div>
+                  </div>
+                  {deviceAnalytics.healthStatus && (
+                    <div className="mt-4">
+                      <Badge variant={deviceAnalytics.healthStatus === 'Healthy' ? 'default' : 'destructive'}>
+                        {deviceAnalytics.healthStatus}
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
 

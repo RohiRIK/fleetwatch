@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
-import { devices } from '@/lib/db/schema';
+import { devices, device_groups } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { protectRouteWithPermission } from '@/lib/auth/api-rbac';
 import { auditDeviceNotesUpdate } from '@/lib/services/auditLog';
@@ -30,9 +30,57 @@ export async function GET(
 
     const device = deviceResults[0];
 
+    // Get device groups
+    const groups = await db
+      .select({
+        id: device_groups.id,
+        groupName: device_groups.groupName,
+        groupType: device_groups.groupType,
+        description: device_groups.description,
+      })
+      .from(device_groups)
+      .where(eq(device_groups.deviceId, id));
+
+    // Get user licenses for the device's user
+    let userLicenses: any[] = [];
+    if (device.userId) {
+      const { user_licenses } = await import('@/lib/db/schema');
+      userLicenses = await db
+        .select({
+          id: user_licenses.id,
+          skuName: user_licenses.skuName,
+          skuPartNumber: user_licenses.skuPartNumber,
+          capabilityStatus: user_licenses.capabilityStatus,
+        })
+        .from(user_licenses)
+        .where(eq(user_licenses.userId, device.userId));
+    }
+
+    // Get device analytics
+    let deviceAnalytics: any = null;
+    const { device_analytics } = await import('@/lib/db/schema');
+    const [analytics] = await db
+      .select({
+        overallScore: device_analytics.overallScore,
+        startupScore: device_analytics.startupScore,
+        appReliabilityScore: device_analytics.appReliabilityScore,
+        batteryScore: device_analytics.batteryScore,
+        healthStatus: device_analytics.healthStatus,
+      })
+      .from(device_analytics)
+      .where(eq(device_analytics.deviceId, id))
+      .limit(1);
+    
+    if (analytics) {
+      deviceAnalytics = analytics;
+    }
+
     return NextResponse.json({
       success: true,
       device,
+      deviceGroups: groups,
+      userLicenses,
+      deviceAnalytics,
     });
   } catch (error: any) {
     console.error('[API] Failed to fetch device:', error);
