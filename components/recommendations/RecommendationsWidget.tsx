@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, AlertCircle, Info, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Loader2, AlertTriangle, AlertCircle, Info, CheckCircle2, RefreshCw, ArrowRight } from 'lucide-react';
 
 interface RecommendationStats {
   bySeverity: Record<string, number>;
@@ -82,19 +83,27 @@ export function RecommendationsWidget() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-lg font-medium">Fleet Health Recommendations</CardTitle>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleGenerate}
-          disabled={generating}
-        >
-          {generating ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
-          )}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/recommendations">
+              View All
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGenerate}
+            disabled={generating}
+          >
+            {generating ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

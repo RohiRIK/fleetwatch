@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Activity,
+  Lightbulb,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Compliance', href: '/compliance', icon: Shield },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Users', href: '/users', icon: Users },
+  { name: 'Recommendations', href: '/recommendations', icon: Lightbulb },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
