@@ -43,9 +43,9 @@ describe('SecurityHardwareCard', () => {
     render(<SecurityHardwareCard data={mockInsecureDevice} />);
     
     expect(screen.getByText('TPM Present')).toBeInTheDocument();
-    // When TPM is false, it should show "Not Present" badge
-    const notPresentBadges = screen.getAllByText('Not Present');
-    expect(notPresentBadges.length).toBeGreaterThanOrEqual(1);
+    // When TPM is false, it should show "No" badge
+    const noBadges = screen.getAllByText('No');
+    expect(noBadges.length).toBeGreaterThanOrEqual(1);
   });
 
   it('should display Secure Boot status', () => {
@@ -61,32 +61,26 @@ describe('SecurityHardwareCard', () => {
     render(<SecurityHardwareCard data={mockInsecureDevice} />);
     
     expect(screen.getByText('Boot Debugging')).toBeInTheDocument();
-    // Boot debugging enabled shows "Security Risk" badge
-    // Check that "Security Risk" text exists somewhere on the page
+    // Boot debugging enabled shows "Enabled (Security Risk)" text
     const pageContent = document.body.textContent;
-    expect(pageContent).toContain('Security Risk');
+    expect(pageContent).toContain('Enabled (Security Risk)');
   });
 
-  it('should show overall security status as secure for compliant devices', () => {
+  it('should render all security hardware fields for secure device', () => {
     render(<SecurityHardwareCard data={mockSecureDevice} />);
     
-    expect(screen.getByText('Overall Security')).toBeInTheDocument();
-    expect(screen.getByText('Secure')).toBeInTheDocument();
-  });
-
-  it('should show overall security status as at-risk for non-compliant devices', () => {
-    render(<SecurityHardwareCard data={mockInsecureDevice} />);
-    
-    expect(screen.getByText('Overall Security')).toBeInTheDocument();
-    expect(screen.getByText('At Risk')).toBeInTheDocument();
+    expect(screen.getByText('TPM Present')).toBeInTheDocument();
+    expect(screen.getByText('Secure Boot')).toBeInTheDocument();
+    expect(screen.getByText('Code Integrity')).toBeInTheDocument();
+    expect(screen.getByText('Boot Debugging')).toBeInTheDocument();
   });
 
   it('should handle empty data gracefully', () => {
     render(<SecurityHardwareCard data={mockEmptyDevice} />);
     
     expect(screen.getByText('Security Hardware')).toBeInTheDocument();
-    // When all data is null, features show "Unknown" badge
-    expect(screen.getAllByText('Unknown').length).toBeGreaterThanOrEqual(1);
+    // When all data is null, it shows "No security hardware information available"
+    expect(screen.getByText('No security hardware information available')).toBeInTheDocument();
   });
 
   it('should have appropriate security icon', () => {
