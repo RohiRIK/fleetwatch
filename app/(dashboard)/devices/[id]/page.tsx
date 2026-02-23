@@ -240,17 +240,38 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
         {/* Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-          <TabsTrigger value="configuration">Configuration</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="hardware">Hardware</TabsTrigger>
-          <TabsTrigger value="network">Network</TabsTrigger>
+          <TabsTrigger value="overview" className="flex items-center gap-1">
+            <Monitor className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="compliance" className="flex items-center gap-1">
+            <Shield className="h-4 w-4" />
+            Compliance
+          </TabsTrigger>
+          <TabsTrigger value="configuration" className="flex items-center gap-1">
+            <Settings className="h-4 w-4" />
+            Configuration
+          </TabsTrigger>
+          <TabsTrigger value="security" className="flex items-center gap-1">
+            <Lock className="h-4 w-4" />
+            Security
+          </TabsTrigger>
+          <TabsTrigger value="hardware" className="flex items-center gap-1">
+            <Cpu className="h-4 w-4" />
+            Hardware
+          </TabsTrigger>
+          <TabsTrigger value="network" className="flex items-center gap-1">
+            <Wifi className="h-4 w-4" />
+            Network
+          </TabsTrigger>
           <TabsTrigger value="recommendations" className="flex items-center gap-1">
             <Lightbulb className="h-4 w-4" />
             Recommendations
           </TabsTrigger>
-          <TabsTrigger value="raw">Raw Data</TabsTrigger>
+          <TabsTrigger value="raw" className="flex items-center gap-1">
+            <Database className="h-4 w-4" />
+            Raw Data
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
