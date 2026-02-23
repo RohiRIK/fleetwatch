@@ -29,7 +29,7 @@ if (SENTRY_DSN) {
         delete env.DATABASE_URL;
         delete env.REDIS_URL;
         delete env.NEXTAUTH_SECRET;
-        delete env.AZURE_AD_CLIENT_SECRET;
+        delete env.ENTRA_CLIENT_SECRET;
         delete env.ADMIN_PASSWORD_HASH;
         delete env.CRON_SECRET;
       }

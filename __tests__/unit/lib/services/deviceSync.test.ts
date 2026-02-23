@@ -54,6 +54,15 @@ vi.mock('@/lib/db/schema', () => ({
   activityLogs: {},
   complianceHistory: {},
   storageHistory: {},
+  device_groups: {
+    id: 'id',
+    deviceId: 'device_id',
+    groupId: 'group_id',
+  },
+  user_devices: {},
+  user_licenses: {},
+  device_analytics: {},
+  device_warranty: {},
 }));
 
 // ============================================================================

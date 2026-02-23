@@ -12,11 +12,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // This allows both Azure AD (OAuth) and Credentials providers to work together
   
   providers: [
-    // PRIMARY: Azure AD OAuth (for regular users)
+    // PRIMARY: Microsoft Entra ID OAuth (for regular users)
     AzureADProvider({
-      clientId: process.env.AZURE_AD_CLIENT_ID!,
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
-      issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
+      clientId: process.env.ENTRA_CLIENT_ID!,
+      clientSecret: process.env.ENTRA_CLIENT_SECRET!,
+      issuer: `https://login.microsoftonline.com/${process.env.ENTRA_TENANT_ID}/v2.0`,
       authorization: {
         params: {
           scope: 'openid profile email User.Read',

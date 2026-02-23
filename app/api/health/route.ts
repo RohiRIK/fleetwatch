@@ -91,14 +91,14 @@ async function checkGraphApi(): Promise<ServiceHealth> {
   
   try {
     // Check if Graph API credentials are configured
-    const tenantId = process.env.AZURE_AD_TENANT_ID;
-    const clientId = process.env.AZURE_AD_CLIENT_ID;
-    const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+    const tenantId = process.env.ENTRA_TENANT_ID;
+    const clientId = process.env.ENTRA_CLIENT_ID;
+    const clientSecret = process.env.ENTRA_CLIENT_SECRET;
     
     if (!tenantId || !clientId || !clientSecret) {
       return {
         status: "unknown",
-        message: "Graph API credentials not configured",
+        message: "Microsoft Entra ID credentials not configured",
         lastChecked: new Date(),
       };
     }

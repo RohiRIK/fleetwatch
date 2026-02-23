@@ -115,9 +115,9 @@ export const DEFAULT_SETTINGS: Record<SettingKey, SettingValue> = {
   'notifications.thresholds.compliance': 80, // Alert if <80% compliant
   'notifications.thresholds.syncErrors': 5, // Alert if >=5 errors
   
-  // Azure defaults (from ENV)
-  'azure.tenantId': process.env.AZURE_AD_TENANT_ID || '',
-  'azure.clientId': process.env.AZURE_AD_CLIENT_ID || '',
+  // Entra ID defaults (from ENV)
+  'azure.tenantId': process.env.ENTRA_TENANT_ID || '',
+  'azure.clientId': process.env.ENTRA_CLIENT_ID || '',
   
   // System defaults
   'system.maintenance': false,

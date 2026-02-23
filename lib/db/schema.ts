@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, boolean, bigint, integer, timestamp, jsonb, pgEnum, unique, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, bigint, integer, timestamp, jsonb, pgEnum, unique, primaryKey, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Enums
@@ -835,3 +835,92 @@ export type NewDeviceConfigurationProfileState = typeof device_configuration_pro
 
 export type DeviceConditionalAccess = typeof device_conditional_access.$inferSelect;
 export type NewDeviceConditionalAccess = typeof device_conditional_access.$inferInsert;
+
+// ============================================================================
+// ENUMS FOR RECOMMENDATIONS
+// ============================================================================
+export const recommendationSeverityEnum = pgEnum('recommendation_severity', ['critical', 'high', 'medium', 'low']);
+export const recommendationCategoryEnum = pgEnum('recommendation_category', ['security', 'compliance', 'performance', 'maintenance', 'license']);
+export const recommendationStatusEnum = pgEnum('recommendation_status', ['active', 'acknowledged', 'resolved', 'dismissed']);
+
+// ============================================================================
+// FLEET_RECOMMENDATIONS TABLE - Intelligent recommendations for fleet health
+// ============================================================================
+export const fleetRecommendations = pgTable('fleet_recommendations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  
+  // Recommendation details
+  severity: recommendationSeverityEnum('severity').notNull(),
+  category: recommendationCategoryEnum('category').notNull(),
+  status: recommendationStatusEnum('status').notNull().default('active'),
+  
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description').notNull(),
+  recommendationType: varchar('recommendation_type', { length: 100 }).notNull(),
+  ruleId: varchar('rule_id', { length: 100 }).notNull(),
+  
+  // Action fields
+  actionUrl: varchar('action_url', { length: 500 }),
+  actionLabel: varchar('action_label', { length: 100 }),
+  
+  // Metadata
+  deviceName: varchar('device_name', { length: 255 }),
+  deviceSerialNumber: varchar('device_serial_number', { length: 255 }),
+  userEmail: varchar('user_email', { length: 255 }),
+  
+  // Priority score (calculated)
+  priorityScore: integer('priority_score'),
+  
+  // Timestamps
+  acknowledgedAt: timestamp('acknowledged_at'),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  recommendationDeviceIdIdx: index('idx_recommendation_device_id').on(table.deviceId),
+  recommendationSeverityIdx: index('idx_recommendation_severity').on(table.severity),
+  recommendationCategoryIdx: index('idx_recommendation_category').on(table.category),
+  recommendationStatusIdx: index('idx_recommendation_status').on(table.status),
+  recommendationCreatedAtIdx: index('idx_recommendation_created_at').on(table.createdAt),
+}));
+
+export const fleetRecommendationsRelations = relations(fleetRecommendations, ({ one }) => ({
+  device: one(devices, {
+    fields: [fleetRecommendations.deviceId],
+    references: [devices.id],
+  }),
+  user: one(users, {
+    fields: [fleetRecommendations.userId],
+    references: [users.id],
+  }),
+}));
+
+// ============================================================================
+// RECOMMENDATION_SETTINGS TABLE - Configurable thresholds
+// ============================================================================
+export const recommendationSettings = pgTable('recommendation_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  
+  ruleId: varchar('rule_id', { length: 100 }).notNull().unique(),
+  category: recommendationCategoryEnum('category').notNull(),
+  severity: recommendationSeverityEnum('severity').notNull(),
+  
+  enabled: boolean('enabled').notNull().default(true),
+  threshold: jsonb('threshold'),
+  
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const recommendationSettingsRelations = relations(recommendationSettings, ({}) => ({}));
+
+// ============================================================================
+// TYPE EXPORTS
+// ============================================================================
+export type FleetRecommendation = typeof fleetRecommendations.$inferSelect;
+export type NewFleetRecommendation = typeof fleetRecommendations.$inferInsert;
+
+export type RecommendationSetting = typeof recommendationSettings.$inferSelect;
+export type NewRecommendationSetting = typeof recommendationSettings.$inferInsert;
