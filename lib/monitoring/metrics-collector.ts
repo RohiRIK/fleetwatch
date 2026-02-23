@@ -100,6 +100,8 @@ const REDIS_KEYS = {
 };
 
 async function addRequestToRedis(metric: RequestMetric): Promise<void> {
+  if (!redis) return;
+  
   try {
     const ttl = DEFAULT_CONFIG.retentionMinutes * 60; // Convert to seconds
 
@@ -129,6 +131,8 @@ async function addRequestToRedis(metric: RequestMetric): Promise<void> {
 }
 
 async function getRequestsFromRedis(minutes: number): Promise<RequestMetric[]> {
+  if (!redis) return [];
+  
   try {
     const cutoff = Date.now() - minutes * 60 * 1000;
     const records = await redis.zrangebyscore(
@@ -154,6 +158,8 @@ async function getRequestsFromRedis(minutes: number): Promise<RequestMetric[]> {
 }
 
 async function recordCacheHitInRedis(): Promise<void> {
+  if (!redis) return;
+  
   try {
     await redis.incr(REDIS_KEYS.cacheHits);
   } catch (error) {
@@ -165,6 +171,8 @@ async function recordCacheHitInRedis(): Promise<void> {
 }
 
 async function recordCacheMissInRedis(): Promise<void> {
+  if (!redis) return;
+  
   try {
     await redis.incr(REDIS_KEYS.cacheMisses);
   } catch (error) {
@@ -176,6 +184,8 @@ async function recordCacheMissInRedis(): Promise<void> {
 }
 
 async function getCacheStatsFromRedis(): Promise<{ hits: number; misses: number }> {
+  if (!redis) return { hits: 0, misses: 0 };
+  
   try {
     const [hits, misses] = await Promise.all([
       redis.get(REDIS_KEYS.cacheHits),
@@ -341,6 +351,8 @@ class MetricsCollector {
    */
   async clearMetrics(): Promise<void> {
     if (this.config.storageType === "redis") {
+      if (!redis) return;
+      
       try {
         await redis.del(
           REDIS_KEYS.requests,

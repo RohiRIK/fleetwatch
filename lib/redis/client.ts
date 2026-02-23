@@ -1,49 +1,53 @@
 import Redis from 'ioredis';
 
 // Redis connection
-const redisUrl = process.env.REDIS_URL!;
+const redisUrl = process.env.REDIS_URL;
 
-if (!redisUrl) {
-  throw new Error('REDIS_URL environment variable is not set');
+let redisInstance: Redis | null = null;
+
+if (redisUrl) {
+  try {
+    redisInstance = new Redis(redisUrl, {
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      reconnectOnError(err) {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+          return true;
+        }
+        return false;
+      },
+    });
+
+    redisInstance.on('error', (error) => {
+      console.error('Redis connection error:', error);
+    });
+
+    redisInstance.on('connect', () => {
+      console.log('✅ Redis connected successfully');
+    });
+
+    redisInstance.on('ready', () => {
+      console.log('✅ Redis ready to accept commands');
+    });
+
+    redisInstance.on('close', () => {
+      console.warn('⚠️  Redis connection closed');
+    });
+
+    redisInstance.on('reconnecting', () => {
+      console.log('🔄 Redis reconnecting...');
+    });
+  } catch (error) {
+    console.warn('⚠️  Failed to initialize Redis:', error);
+    redisInstance = null;
+  }
+} else {
+  console.warn('⚠️  REDIS_URL not set - Redis features disabled');
 }
-
-// Create Redis client with retry strategy
-export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: 3,
-  retryStrategy(times) {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  reconnectOnError(err) {
-    const targetError = 'READONLY';
-    if (err.message.includes(targetError)) {
-      // Only reconnect when the error contains "READONLY"
-      return true;
-    }
-    return false;
-  },
-});
-
-// Redis error handling
-redis.on('error', (error) => {
-  console.error('Redis connection error:', error);
-});
-
-redis.on('connect', () => {
-  console.log('✅ Redis connected successfully');
-});
-
-redis.on('ready', () => {
-  console.log('✅ Redis ready to accept commands');
-});
-
-redis.on('close', () => {
-  console.warn('⚠️  Redis connection closed');
-});
-
-redis.on('reconnecting', () => {
-  console.log('🔄 Redis reconnecting...');
-});
 
 // ============================================================================
 // Enhanced Redis Client with Metrics Tracking
@@ -53,9 +57,9 @@ redis.on('reconnecting', () => {
  * Wrapper around Redis client that tracks cache hits/misses
  */
 export class RedisClientWithMetrics {
-  private client: Redis;
+  private client: Redis | null;
 
-  constructor(client: Redis) {
+  constructor(client: Redis | null) {
     this.client = client;
   }
 
@@ -63,51 +67,80 @@ export class RedisClientWithMetrics {
    * Get a value and record cache hit/miss
    */
   async get(key: string): Promise<string | null> {
-    const value = await this.client.get(key);
+    if (!this.client) return null;
     
-    // Record metrics asynchronously
-    this.recordCacheMetric(value !== null).catch((error) => {
-      console.error('[Redis] Failed to record cache metric:', error);
-    });
-    
-    return value;
+    try {
+      const value = await this.client.get(key);
+      
+      this.recordCacheMetric(value !== null).catch(() => {});
+      
+      return value;
+    } catch {
+      return null;
+    }
   }
 
   /**
    * Set a value
    */
-  async set(key: string, value: string, ttl?: number): Promise<'OK'> {
-    if (ttl) {
-      return await this.client.setex(key, ttl, value);
+  async set(key: string, value: string, ttl?: number): Promise<boolean> {
+    if (!this.client) return false;
+    
+    try {
+      if (ttl) {
+        await this.client.setex(key, ttl, value);
+      } else {
+        await this.client.set(key, value);
+      }
+      return true;
+    } catch {
+      return false;
     }
-    return await this.client.set(key, value);
   }
 
   /**
    * Delete a key
    */
   async del(...keys: string[]): Promise<number> {
-    return await this.client.del(...keys);
+    if (!this.client) return 0;
+    
+    try {
+      return await this.client.del(...keys);
+    } catch {
+      return 0;
+    }
   }
 
   /**
    * Check if key exists
    */
   async exists(...keys: string[]): Promise<number> {
-    return await this.client.exists(...keys);
+    if (!this.client) return 0;
+    
+    try {
+      return await this.client.exists(...keys);
+    } catch {
+      return 0;
+    }
   }
 
   /**
    * Get TTL of a key
    */
   async ttl(key: string): Promise<number> {
-    return await this.client.ttl(key);
+    if (!this.client) return -2;
+    
+    try {
+      return await this.client.ttl(key);
+    } catch {
+      return -2;
+    }
   }
 
   /**
    * Expose original client for direct access
    */
-  get raw(): Redis {
+  get raw(): Redis | null {
     return this.client;
   }
 
@@ -116,7 +149,6 @@ export class RedisClientWithMetrics {
    */
   private async recordCacheMetric(isHit: boolean): Promise<void> {
     try {
-      // Dynamically import to avoid circular dependencies
       const { metricsCollector } = await import('@/lib/monitoring/metrics-collector');
       
       if (isHit) {
@@ -124,15 +156,17 @@ export class RedisClientWithMetrics {
       } else {
         await metricsCollector.recordCacheMiss();
       }
-    } catch (error) {
+    } catch {
       // Silently fail - metrics are not critical
-      // Don't log to avoid noise
     }
   }
 }
 
 // Export enhanced client
-export const redisWithMetrics = new RedisClientWithMetrics(redis);
+export const redisWithMetrics = new RedisClientWithMetrics(redisInstance);
 
-// Export Redis client
+// Export Redis client (may be null)
+export const redis = redisInstance;
+
+// Default export
 export default redis;

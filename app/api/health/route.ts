@@ -56,6 +56,16 @@ async function checkDatabase(): Promise<ServiceHealth> {
 async function checkRedis(): Promise<ServiceHealth> {
   const startTime = Date.now();
   
+  // Redis not configured
+  if (!redis) {
+    return {
+      status: "unknown",
+      latency: 0,
+      message: "Redis is not configured (REDIS_URL not set)",
+      lastChecked: new Date(),
+    };
+  }
+  
   try {
     // Ping Redis
     await redis.ping();
