@@ -22,7 +22,7 @@ export async function syncUserLicenses(azureId: string, userId: string): Promise
   try {
     const response = await getUserLicenseDetails(azureId);
     
-    const licenseDetails = Array.isArray(response) ? response : response?.value || [];
+    const licenseDetails = Array.isArray(response) ? response : [];
     
     if (licenseDetails.length === 0) {
       await db
