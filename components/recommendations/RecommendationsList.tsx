@@ -5,7 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, AlertTriangle, AlertCircle, Info, CheckCircle2, ExternalLink, X } from 'lucide-react';
+import { Loader2, AlertTriangle, AlertCircle, Info, CheckCircle2, ExternalLink, X, HelpCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface Recommendation {
   id: string;
@@ -23,6 +31,11 @@ interface Recommendation {
   userEmail: string | null;
   priorityScore: number | null;
   createdAt: string;
+  extendedInfo?: {
+    whatsWrong: string;
+    whyItMatters: string;
+    howToFix: string;
+  };
 }
 
 const severityConfig = {
@@ -217,6 +230,40 @@ export function RecommendationsList({ deviceId }: RecommendationsListProps) {
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       </Button>
+                    )}
+                    
+                    {rec.extendedInfo && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <HelpCircle className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg">
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                              <HelpCircle className="h-5 w-5 text-blue-500" />
+                              How to Fix: {rec.recommendationType}
+                            </DialogTitle>
+                            <DialogDescription asChild>
+                              <div className="mt-4 space-y-4 text-sm">
+                                <div>
+                                  <h4 className="font-semibold text-foreground">What's Wrong</h4>
+                                  <p className="text-muted-foreground mt-1">{rec.extendedInfo.whatsWrong}</p>
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-foreground">Why It Matters</h4>
+                                  <p className="text-muted-foreground mt-1">{rec.extendedInfo.whyItMatters}</p>
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-foreground">How to Fix</h4>
+                                  <pre className="mt-1 text-xs bg-muted p-3 rounded-lg whitespace-pre-wrap">{rec.extendedInfo.howToFix}</pre>
+                                </div>
+                              </div>
+                            </DialogDescription>
+                          </DialogHeader>
+                        </DialogContent>
+                      </Dialog>
                     )}
                     
                     {rec.status === 'active' && (

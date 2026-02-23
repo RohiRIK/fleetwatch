@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRecommendations, getRecommendationStats, generateAllRecommendations } from '@/lib/services/recommendationGenerator';
+import { getRuleById } from '@/lib/services/recommendationEngine';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,10 +27,21 @@ export async function GET(request: NextRequest) {
       offset,
     });
 
+    const enrichedRecommendations = recommendations.map((rec: any) => {
+      const rule = getRuleById(rec.ruleId);
+      if (rule?.getExtendedInfo) {
+        return {
+          ...rec,
+          extendedInfo: rule.getExtendedInfo(rec as any),
+        };
+      }
+      return rec;
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        recommendations,
+        recommendations: enrichedRecommendations,
         total,
         limit,
         offset,

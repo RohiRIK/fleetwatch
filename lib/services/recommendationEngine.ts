@@ -23,6 +23,11 @@ export interface RecommendationRule {
   evaluate: (device: Device, analytics?: Analytics, user?: User) => boolean;
   getTitle: (device: Device, analytics?: Analytics, user?: User) => string;
   getDescription: (device: Device, analytics?: Analytics, user?: User) => string;
+  getExtendedInfo?: (device: Device, analytics?: Analytics, user?: User) => {
+    whatsWrong: string;
+    whyItMatters: string;
+    howToFix: string;
+  };
 }
 
 const SEVERITY_WEIGHTS: Record<Severity, number> = {
@@ -60,6 +65,11 @@ const securityRules: RecommendationRule[] = [
     evaluate: (device) => device.isEncrypted === false,
     getTitle: (d) => `BitLocker/FileVault not enabled on ${d.deviceName}`,
     getDescription: (d) => `Device ${d.deviceName} (${d.serialNumber || 'unknown serial'}) does not have disk encryption enabled.`,
+    getExtendedInfo: (d) => ({
+      whatsWrong: `Device "${d.deviceName}" does not have BitLocker (Windows) or FileVault (Mac) encryption enabled.`,
+      whyItMatters: 'Without encryption, anyone who steals the device can access all data. This is a major security risk and may violate compliance policies (SOC 2, HIPAA, GDPR).',
+      howToFix: '1. Enable BitLocker on Windows devices via Intune policy\n2. Enable FileVault on Mac devices via Intune policy\n3. Ensure TPM is enabled in BIOS\n4. Verify encryption status in Microsoft Endpoint Manager',
+    }),
   },
   {
     id: 'SEC-002',
@@ -70,6 +80,11 @@ const securityRules: RecommendationRule[] = [
     evaluate: (device) => device.jailBroken === 'Yes' || device.jailBroken === 'true',
     getTitle: (d) => `Security compromised: ${d.deviceName} is jailbroken`,
     getDescription: (d) => `Device ${d.deviceName} has been jailbroken or rooted, bypassing all security controls.`,
+    getExtendedInfo: (d) => ({
+      whatsWrong: `Device "${d.deviceName}" has been jailbroken (iOS/Android) or rooted (Android), removing manufacturer security restrictions.`,
+      whyItMatters: 'Jailbroken devices can install unverified apps, bypass security controls, and are vulnerable to malware. Corporate data on these devices is at extreme risk.',
+      howToFix: '1. Wipe and re-enroll the device\n2. Block jailbroken devices in Intune compliance policies\n3. Consider blocking access to corporate resources\n4. Investigate why user jailbroke device (may need training)',
+    }),
   },
   {
     id: 'SEC-003',
@@ -130,6 +145,26 @@ const securityRules: RecommendationRule[] = [
     evaluate: (device) => device.isCompliant === false,
     getTitle: (d) => `${d.deviceName} is non-compliant`,
     getDescription: (d) => `Device ${d.deviceName} fails one or more compliance policies and must be remediated.`,
+    getExtendedInfo: (d) => ({
+      whatsWrong: `Device "${d.deviceName}" is marked as non-compliant in Intune. This means it fails one or more compliance policies.`,
+      whyItMatters: 'Non-compliant devices may be blocked from accessing corporate email, VPN, and other resources. This protects company data but can impact productivity.',
+      howToFix: '1. Check compliance failures in Microsoft Endpoint Admin Center\n2. Ensure device has required policies assigned\n3. Verify device meets hardware requirements\n4. Check for conflicts between policies\n5. User may need to manually check compliance',
+    }),
+  },
+  {
+    id: 'SEC-009',
+    name: 'Compliance Grace Period Expired',
+    category: 'security',
+    severity: 'critical',
+    description: 'Compliance grace period has expired.',
+    evaluate: (device) => device.complianceGracePeriodExpiration !== null && new Date(device.complianceGracePeriodExpiration) < new Date(),
+    getTitle: (d) => `Compliance grace period expired on ${d.deviceName}`,
+    getDescription: (d) => `Device ${d.deviceName} grace period for compliance has expired.`,
+    getExtendedInfo: (d) => ({
+      whatsWrong: `Device "${d.deviceName}" exceeded its compliance grace period. The device was given time to become compliant but failed.`,
+      whyItMatters: 'After grace period expires, the device loses access to corporate resources. This is enforced by Conditional Access policies.',
+      howToFix: '1. Extend grace period in compliance policy settings\n2. Remediate compliance issues on the device\n3. Re-enroll device if issues persist\n4. Consider temporary access while issues are resolved',
+    }),
   },
   {
     id: 'SEC-009',
